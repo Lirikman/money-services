@@ -1,2 +1,2 @@
-# money_services
+# money-services
 Money transfer services
