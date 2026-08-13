@@ -1,0 +1,329 @@
+basePath: /api/v1
+definitions:
+  services_gw-currency-wallet_delivery.BalanceResponse:
+    properties:
+      balance:
+        additionalProperties:
+          type: string
+        example:
+          EUR: "100.00"
+          RUB: "3000.00"
+          USD: "500.00"
+        type: object
+    type: object
+  services_gw-currency-wallet_delivery.DeptWithResponse:
+    properties:
+      message:
+        example: deposit successful or withdrawal successful
+        type: string
+      new_balance:
+        additionalProperties:
+          type: string
+        example:
+          EUR: "100.00"
+          RUB: "3000.00"
+          USD: "500.00"
+        type: object
+    type: object
+  services_gw-currency-wallet_delivery.ErrorResponse:
+    properties:
+      error:
+        example: operation failed
+        type: string
+    type: object
+  services_gw-currency-wallet_delivery.ExchangeResponse:
+    properties:
+      exchanged_amount:
+        example: 300
+        type: number
+      message:
+        example: currency exchange successful
+        type: string
+      new_balance:
+        additionalProperties:
+          type: string
+        example:
+          EUR: "100.00"
+          RUB: "3000.00"
+          USD: "500.00"
+        type: object
+    type: object
+  services_gw-currency-wallet_delivery.GetRateResponse:
+    properties:
+      rates:
+        additionalProperties:
+          format: float32
+          type: number
+        example:
+          EUR/USD: 0.12
+          RUB/USD: 0.1
+          USD/EUR: 0.02
+          USD/RUB: 1.12
+        type: object
+    type: object
+  services_gw-currency-wallet_delivery.LoginResponse:
+    properties:
+      token:
+        example: JWT_TOKEN
+        type: string
+    type: object
+  services_gw-currency-wallet_delivery.RegisterResponse:
+    properties:
+      message:
+        example: User registered successfully
+        type: string
+    type: object
+  services_gw-currency-wallet_delivery.authReq:
+    properties:
+      email:
+        example: ivani_iv123@ya.ru
+        type: string
+      password:
+        example: SeCrEtS-New902!
+        type: string
+      username:
+        example: ivan_ivanov
+        type: string
+    type: object
+  services_gw-currency-wallet_delivery.exchangeReq:
+    properties:
+      amount:
+        example: 300
+        type: number
+      from_currency:
+        example: USD
+        type: string
+      to_currency:
+        example: RUB
+        type: string
+    type: object
+  services_gw-currency-wallet_delivery.walletReq:
+    properties:
+      amount:
+        example: 3500
+        type: number
+      currency:
+        example: USD
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API-service currency-wallet
+  title: Swagger Documentation API
+  version: "1.0"
+paths:
+  /balance:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current balance of the user based on their ID from
+        the authorization token.
+      parameters:
+      - description: Authorization token (Bearer <token>)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful balance receipt
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.BalanceResponse'
+        "400":
+          description: Invalid request or missing user ID
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Getting a user's balance
+  /exchange:
+    post:
+      consumes:
+      - application/json
+      description: Converts the specified amount from one currency to another within
+        the user's wallet
+      parameters:
+      - description: Authorization token (Bearer <token>)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Exchange details (amount, from which currency, to which)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services_gw-currency-wallet_delivery.exchangeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: The exchange was successfully completed
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ExchangeResponse'
+        "400":
+          description: Invalid request format, invalid currencies, or insufficient
+            funds
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Currency exchange
+  /exchange/rates:
+    get:
+      description: Returns current currency exchange rates
+      parameters:
+      - description: Authorization token (Bearer <token>)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully receiving exchange rates
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.GetRateResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Obtaining exchange rates
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with a username and password, returning a
+        JWT token.
+      parameters:
+      - description: Login details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services_gw-currency-wallet_delivery.authReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful authorization (returns token)
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.LoginResponse'
+        "400":
+          description: Invalid request body format
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "401":
+          description: Incorrect username or password
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: User authorization
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account using name, email, and password.
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services_gw-currency-wallet_delivery.authReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Successful registration
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.RegisterResponse'
+        "400":
+          description: Invalid data format or user already exists
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Create a new user
+  /wallet/deposit:
+    post:
+      consumes:
+      - application/json
+      description: 'Tops up the user''s balance with the specified amount in the selected
+        currency (supports: USD, EUR, RUB).'
+      parameters:
+      - description: Authorization token (Bearer <token>)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Details for replenishment (amount and currency)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services_gw-currency-wallet_delivery.walletReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Balance has been successfully replenished
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.DeptWithResponse'
+        "400":
+          description: Invalid request format, negative amount, or invalid currency
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Balance replenishment
+  /wallet/withdraw:
+    post:
+      consumes:
+      - application/json
+      description: Writes off the specified amount in the selected currency from the
+        user's balance
+      parameters:
+      - description: Authorization token (Bearer <token>)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Withdrawal details (amount and currency)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services_gw-currency-wallet_delivery.walletReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Funds have been successfully withdrawn
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.DeptWithResponse'
+        "400":
+          description: Invalid request format, negative amount, invalid currency,
+            or insufficient funds
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services_gw-currency-wallet_delivery.ErrorResponse'
+      summary: Withdrawal of funds
+schemes:
+- http
+- https
+swagger: "2.0"
