@@ -367,7 +367,7 @@ const docTemplate = `{
             "properties": {
                 "error": {
                     "type": "string",
-                    "example": "operation failed"
+                    "example": "Internal server error"
                 }
             }
         },

@@ -17,8 +17,7 @@ import (
 
 	"github.com/Lirikman/money_services/internal/logger"
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
-	"github.com/Lirikman/money_services/services/gw-exchanger/app"
-	grpcserver "github.com/Lirikman/money_services/services/gw-exchanger/grpc"
+	"github.com/Lirikman/money_services/services/gw-exchanger/server"
 	"github.com/Lirikman/money_services/services/gw-exchanger/storage/repository"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -90,17 +89,15 @@ func main() {
 	} else {
 		log.Info("Migrations successfully applied")
 	}
-	// Создаем Postgres репозиторий
-	repo := repository.NewPostgresRepository(db, log)
+	// Инициализация репозитория (pеализация postgres)
+	repo := repository.NewPostgresRepository(db)
 
-	service := app.New(repo, log)
-	server := grpcserver.New(service, log)
+	// Создание gRPC сервера
 	grpcServer := grpc.NewServer()
-
-	// Регистрация сервера в gRPC
+	exchangerServer := server.NewExchangerServer(repo, log)
 	pb.RegisterExchangeServiceServer(
 		grpcServer,
-		server,
+		exchangerServer,
 	)
 
 	// Запуск gRPC сервера

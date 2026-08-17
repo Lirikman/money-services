@@ -28,7 +28,7 @@ definitions:
   services_gw-currency-wallet_delivery.ErrorResponse:
     properties:
       error:
-        example: operation failed
+        example: Internal server error
         type: string
     type: object
   services_gw-currency-wallet_delivery.ExchangeResponse:

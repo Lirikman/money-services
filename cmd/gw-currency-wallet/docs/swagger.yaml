@@ -1,9 +1,0 @@
-basePath: /api/v1
-host: localhost:8080
-info:
-  contact: {}
-  description: API-service currency-wallet
-  title: Swagger Documentation API
-  version: "1.0"
-paths: {}
-swagger: "2.0"

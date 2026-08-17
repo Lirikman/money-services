@@ -8,18 +8,19 @@ import (
 
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
-	"github.com/lib/pq"
+	wallRep "github.com/Lirikman/money_services/services/gw-currency-wallet/repository/postgres"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type Handler struct {
 	svc *service.WalletService
+	usr *service.UserService
 	log *slog.Logger
 }
 
-func NewHandler(svc *service.WalletService, log *slog.Logger) *Handler {
-	return &Handler{svc: svc, log: log}
+func NewHandler(svc *service.WalletService, usr *service.UserService, log *slog.Logger) *Handler {
+	return &Handler{svc: svc, usr: usr, log: log}
 }
 
 type authReq struct {
@@ -32,7 +33,12 @@ type RegisterResponse struct {
 	Message string `json:"message" example:"User registered successfully"`
 }
 
-var ErrUserAlreadyExists = errors.New("username or email already exists")
+var regErrors = []error{
+	service.ErrEmailEmpty, service.ErrEmailInvalid, service.ErrUserAlreadyExists,
+	service.ErrUsernameEmpty, service.ErrUsernameTooShort, service.ErrUsernameTooLong,
+	service.ErrUsernameInvalid, service.ErrPasswordTooShort, service.ErrPasswordNoUpper,
+	service.ErrPasswordNoLower, service.ErrPasswordNoNumber, service.ErrPasswordNoSpecial,
+}
 
 // Register godoc
 // @Summary      Create a new user
@@ -59,21 +65,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	h.log.Info("registering new user", slog.String("username", req.Username))
 
-	if _, err := h.svc.Register(r.Context(), req.Username, req.Email, req.Password); err != nil {
-		if pgErr, ok := errors.AsType[*pq.Error](err); ok {
-			switch pgErr.Code {
-			case "23505":
-				h.log.Warn("registration rejected: user already exists",
+	if err := h.usr.Register(r.Context(), req.Username, req.Email, req.Password); err != nil {
+		for _, regErr := range regErrors {
+			if errors.Is(err, regErr) {
+				h.log.Warn("registration rejected: validation error",
 					slog.String("username", req.Username),
 					slog.String("email", req.Email),
+					slog.Any("err", err),
 				)
-				responseError(w, http.StatusBadRequest, "Username or email already exists")
-				return
-			case "23514":
-				h.log.Warn("registration rejected: Incorrect data entered",
-					slog.String("username", req.Username),
-				)
-				responseError(w, http.StatusBadRequest, "Incorrect data entered")
+				responseError(w, http.StatusBadRequest, err.Error())
 				return
 			}
 		}
@@ -120,7 +120,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	h.log.Info("user attempting login", slog.String("username", req.Username))
 
-	token, err := h.svc.Login(r.Context(), req.Username, req.Password)
+	token, err := h.usr.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
 		h.log.Warn("unauthorized login attempt",
 			slog.String("username", req.Username),
@@ -217,15 +217,6 @@ func (h *Handler) Deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Amount <= 0 {
-		h.log.Warn("incorrect top-up amount",
-			slog.Int64("user_id", userID),
-			slog.Float64("amount", req.Amount),
-		)
-		responseError(w, http.StatusBadRequest, "Amount must be positive")
-		return
-	}
-
 	h.log.Info("processing deposit attempt",
 		slog.Int64("user_id", userID),
 		slog.Float64("amount", req.Amount),
@@ -294,15 +285,6 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Amount <= 0 {
-		h.log.Warn("incorrect write-off amount",
-			slog.Int64("user_id", userID),
-			slog.Float64("amount", req.Amount),
-		)
-		responseError(w, http.StatusBadRequest, "Amount must be positive")
-		return
-	}
-
 	h.log.Info("processing withdraw attempt",
 		slog.Int64("user_id", userID),
 		slog.Float64("amount", req.Amount),
@@ -354,6 +336,8 @@ type ExchangeResponse struct {
 	NewBalance      map[string]string `json:"new_balance" example:"EUR:100.00,RUB:3000.00,USD:500.00"`
 }
 
+var transErrors = []error{service.ErrInvalidAmount, service.ErrInvalidCurrency, service.ErrSameCurrency, wallRep.ErrInsufficientFunds}
+
 // ExchangeCurrency Godoc
 // @Summary      Currency exchange
 // @Description  Converts the specified amount from one currency to another within the user's wallet
@@ -390,15 +374,6 @@ func (h *Handler) ExchangeCurrency(w http.ResponseWriter, r *http.Request) {
 		slog.String("to_currency", req.ToCurrency),
 	)
 
-	if req.Amount <= 0 {
-		h.log.Warn("incorrect exchange amount",
-			slog.Int64("user_id", userID),
-			slog.Float64("amount", req.Amount),
-		)
-		responseError(w, http.StatusBadRequest, "Amount must be positive")
-		return
-	}
-
 	if err := h.svc.Exchange(r.Context(), userID, req.FromCurrency, req.ToCurrency, req.Amount); err != nil {
 		h.log.Error("currency exchange failed",
 			slog.Int64("user_id", userID),
@@ -426,6 +401,21 @@ func (h *Handler) ExchangeCurrency(w http.ResponseWriter, r *http.Request) {
 				responseError(w, http.StatusBadRequest, "Insufficient funds or invalid currencies")
 				return
 			}
+		}
+
+		for _, trsErr := range transErrors {
+			if errors.Is(err, trsErr) {
+				h.log.Warn("transaction exchange failed",
+					slog.Int64("user_id", userID),
+					slog.Float64("amount", req.Amount),
+					slog.String("from_currency", req.FromCurrency),
+					slog.String("to_currency", req.ToCurrency),
+					slog.String("err", err.Error()),
+				)
+				responseError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+
 		}
 		responseError(w, http.StatusInternalServerError, "Internal server error")
 		return
@@ -503,7 +493,7 @@ func responseJSON(w http.ResponseWriter, status int, data any) {
 }
 
 type ErrorResponse struct {
-	Error string `json:"error" example:"operation failed"`
+	Error string `json:"error" example:"Internal server error"`
 }
 
 func responseError(w http.ResponseWriter, status int, msg string) {

@@ -4,31 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 
 	"github.com/Lirikman/money_services/services/gw-exchanger/storage"
 )
 
 type Repository struct {
-	db  *sql.DB
-	log *slog.Logger
+	db *sql.DB
 }
 
-func NewPostgresRepository(db *sql.DB, log *slog.Logger) storage.Repository {
-	return &Repository{db: db, log: log}
+func NewPostgresRepository(db *sql.DB) storage.Repository {
+	return &Repository{db: db}
 }
 
-func (r *Repository) GetRate(
+func (r *Repository) GetRateCurrency(
 	ctx context.Context,
 	base_currency string,
-	target_currency string,
-) (float32, error) {
-
-	r.log.Info(
-		"loading exchange rate",
-		slog.String("base_currency", base_currency),
-		slog.String("target_currency", target_currency),
-	)
+	target_currency string) (float32, error) {
 
 	var rate float32
 
@@ -45,17 +36,13 @@ func (r *Repository) GetRate(
 	).Scan(&rate)
 
 	if err != nil {
-		r.log.Error(
-			"db query failed",
-			slog.Any("error", err),
-		)
-		return 0, err
+		return 0, fmt.Errorf("query exchange rate %s/%s failed: %w", base_currency, target_currency, err)
 	}
 
-	return rate, err
+	return rate, nil
 }
 
-func (r *Repository) GetRateCurrency(ctx context.Context) (map[string]float32, error) {
+func (r *Repository) GetRates(ctx context.Context) (map[string]float32, error) {
 
 	result := make(map[string]float32)
 

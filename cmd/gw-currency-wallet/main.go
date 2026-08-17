@@ -15,7 +15,7 @@ import (
 	logger "github.com/Lirikman/money_services/internal/logger"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
 	delivery "github.com/Lirikman/money_services/services/gw-currency-wallet/delivery"
-	repository "github.com/Lirikman/money_services/services/gw-currency-wallet/repository"
+	repository "github.com/Lirikman/money_services/services/gw-currency-wallet/repository/postgres"
 	transport "github.com/Lirikman/money_services/services/gw-currency-wallet/transport"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -97,9 +97,11 @@ func main() {
 	}
 
 	// Сборка слоев приложения
-	repo := repository.NewWallet(db, log)
-	svc := service.NewWalletService(repo, grpcClient, jwtSecret)
-	h := delivery.NewHandler(svc, log)
+	repoWall := repository.NewPostgresWalletRepository(db)
+	repoUsr := repository.NewPostgresUserRepository(db)
+	svc := service.NewWalletService(repoWall, grpcClient)
+	usr := service.NewUserService(repoUsr, jwtSecret)
+	h := delivery.NewHandler(svc, usr, log)
 
 	// Маршрутизация стандартным net/http
 	mux := http.NewServeMux()
