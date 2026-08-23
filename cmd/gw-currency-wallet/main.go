@@ -15,6 +15,7 @@ import (
 	logger "github.com/Lirikman/money_services/internal/logger"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
 	delivery "github.com/Lirikman/money_services/services/gw-currency-wallet/delivery"
+	"github.com/Lirikman/money_services/services/gw-currency-wallet/kafka"
 	repository "github.com/Lirikman/money_services/services/gw-currency-wallet/repository/postgres"
 	transport "github.com/Lirikman/money_services/services/gw-currency-wallet/transport"
 	"github.com/golang-migrate/migrate/v4"
@@ -35,26 +36,28 @@ func main() {
 	configPath := flag.String("c", "config.env", "path to configuration file")
 	flag.Parse()
 
-	// инициализируем логгер
-	log := logger.New()
-	log.Info("Starting service Currency-wallet")
-	log.Debug("Config file flag parsed", slog.String("path", *configPath))
-
 	if _, err := os.Stat(*configPath); err == nil {
-		log.Info("Loading environment variables from file", slog.String("file", *configPath))
+		slog.Info("Loading environment variables from file", slog.String("file", *configPath))
 		if err := godotenv.Load(*configPath); err != nil {
-			log.Error("Error loading configuration file", slog.Any("error", err))
+			slog.Error("Error loading configuration file", slog.Any("error", err))
 			os.Exit(1)
 		}
 	} else {
-		log.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
+		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
 	}
+
+	// инициализируем логгер
+	log := logger.NewLogger(getEnv("LOG_LEVEL", "INFO"))
+	log.Debug("Config file flag parsed", slog.String("path", *configPath))
+	log.Info("Starting service Currency-wallet")
 
 	// Чтение переменных окружения
 	dbURL := getEnv("DB_URL", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
 	grpcAddr := getEnv("EXCHANGE_GRPC_ADDR", "localhost:50051")
 	jwtSecret := getEnv("JWT_SECRET", "super_puper_secret_key")
 	migratePath := getEnv("DB_MIGRATIONS", "file://migrations")
+	kafkaBrokers := []string{getEnv("KAFKA_BROKERS", "localhost:9092")}
+	kafkaTopic := getEnv("KAFKA_TOPIC", "large-transfers")
 
 	// Подключение к PostgresQL
 	db, err := sql.Open("postgres", dbURL)
@@ -99,7 +102,8 @@ func main() {
 	// Сборка слоев приложения
 	repoWall := repository.NewPostgresWalletRepository(db)
 	repoUsr := repository.NewPostgresUserRepository(db)
-	svc := service.NewWalletService(repoWall, grpcClient)
+	writer := kafka.NewProducer(kafkaBrokers, kafkaTopic)
+	svc := service.NewWalletService(repoWall, grpcClient, *writer)
 	usr := service.NewUserService(repoUsr, jwtSecret)
 	h := delivery.NewHandler(svc, usr, log)
 

@@ -31,20 +31,20 @@ func main() {
 	configPath := flag.String("c", "config.env", "path to configuration file")
 	flag.Parse()
 
-	log := logger.New()
-
-	log.Info("Starting service Exchanger")
-	log.Debug("Config file flag parsed", slog.String("path", *configPath))
-
 	if _, err := os.Stat(*configPath); err == nil {
-		log.Info("Loading environment variables from file", slog.String("file", *configPath))
+		slog.Info("Loading environment variables from file", slog.String("file", *configPath))
 		if err := godotenv.Load(*configPath); err != nil {
-			log.Error("Error loading configuration file", slog.Any("error", err))
+			slog.Error("Error loading configuration file", slog.Any("error", err))
 			os.Exit(1)
 		}
 	} else {
-		log.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
+		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
 	}
+
+	log := logger.NewLogger(getEnv("LOG_LEVEL", "INFO"))
+
+	log.Info("Starting service Exchanger")
+	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 
 	// Подключение к PostgresQL
 	host := getEnv("DB_HOST", "localhost")

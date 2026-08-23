@@ -17,3 +17,15 @@ type Wallet struct {
 	Balance   float32   `json:"balance"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type Transaction struct {
+	TransactionID string    `json:"transaction_id" bson:"transaction_id"`
+	UserID        string    `json:"user_id" bson:"user_id"`
+	Operation     string    `json:"operation" bson:"operation"` // deposit, withdraw, exchange
+	Amount        float64   `json:"amount" bson:"amount"`
+	Currency      string    `json:"currency" bson:"currency"`
+	FromCurrency  string    `json:"from_currency,omitempty" bson:"from_currency,omitempty"`
+	ToCurrency    string    `json:"to_currency,omitempty" bson:"to_currency,omitempty"`
+	Rate          float64   `json:"rate,omitempty" bson:"rate,omitempty"`
+	CreatedAt     time.Time `json:"created_at" bson:"created_at"`
+}
