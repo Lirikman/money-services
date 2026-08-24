@@ -103,7 +103,7 @@ func main() {
 	repoWall := repository.NewPostgresWalletRepository(db)
 	repoUsr := repository.NewPostgresUserRepository(db)
 	writer := kafka.NewProducer(kafkaBrokers, kafkaTopic)
-	svc := service.NewWalletService(repoWall, grpcClient, *writer)
+	svc := service.NewWalletService(repoWall, grpcClient, writer)
 	usr := service.NewUserService(repoUsr, jwtSecret)
 	h := delivery.NewHandler(svc, usr, log)
 

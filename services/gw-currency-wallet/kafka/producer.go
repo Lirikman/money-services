@@ -5,30 +5,31 @@ import (
 	"encoding/json"
 	"time"
 
-	kafkago "github.com/segmentio/kafka-go"
-
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
+	pr "github.com/Lirikman/money_services/services/gw-currency-wallet/repository"
+	kafkago "github.com/segmentio/kafka-go"
 )
 
-type Producer struct {
+type kafkaProducer struct {
 	writer *kafkago.Writer
 }
 
 // Создание нового продюсера
-func NewProducer(brokers []string, topic string) *Producer {
-	return &Producer{
+func NewProducer(brokers []string, topic string) pr.Producer {
+	return &kafkaProducer{
 		writer: &kafkago.Writer{
 			Addr:         kafkago.TCP(brokers...),
 			Topic:        topic,
 			BatchSize:    100,
 			BatchTimeout: 10 * time.Millisecond,
 			RequiredAcks: kafkago.RequireAll,
+			Balancer:     &kafkago.Murmur2Balancer{},
 		},
 	}
 }
 
 // Отправка сообщений в kafka
-func (p *Producer) Send(ctx context.Context, transfer models.Transaction) error {
+func (p *kafkaProducer) Send(ctx context.Context, transfer models.Transaction) error {
 	data, err := json.Marshal(transfer)
 
 	if err != nil {
@@ -41,6 +42,6 @@ func (p *Producer) Send(ctx context.Context, transfer models.Transaction) error 
 }
 
 // Закрытие соединения
-func (p *Producer) Close() error {
+func (p *kafkaProducer) Close() error {
 	return p.writer.Close()
 }

@@ -133,7 +133,7 @@ func (s *NotificationService) Run(ctx context.Context) error {
 				slog.Any("error", err),
 			)
 
-			if commitErr := s.consumer.Commit(ctx, message); err != nil {
+			if commitErr := s.consumer.Commit(ctx, message); commitErr != nil {
 				return commitErr
 			}
 

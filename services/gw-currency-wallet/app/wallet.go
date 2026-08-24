@@ -6,16 +6,15 @@ import (
 	"strconv"
 
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
-	"github.com/Lirikman/money_services/services/gw-currency-wallet/kafka"
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/repository"
 	"github.com/google/uuid"
 )
 
 type WalletService struct {
-	repo       repository.WalletRepository
-	grpcClient repository.CurrencyClient
-	producer   kafka.Producer
+	repo          repository.WalletRepository
+	grpcClient    repository.CurrencyClient
+	kafkaProducer repository.Producer
 }
 
 var (
@@ -27,8 +26,8 @@ var (
 )
 
 // Создание нового сервиса кошелька
-func NewWalletService(repo repository.WalletRepository, grpcClient repository.CurrencyClient, producer kafka.Producer) *WalletService {
-	return &WalletService{repo: repo, grpcClient: grpcClient, producer: producer}
+func NewWalletService(repo repository.WalletRepository, grpcClient repository.CurrencyClient, producer repository.Producer) *WalletService {
+	return &WalletService{repo: repo, grpcClient: grpcClient, kafkaProducer: producer}
 }
 
 // Пополнение кошелька
@@ -56,7 +55,7 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.producer.Send(ctx, transDeposit); prodErr != nil {
+	if prodErr := s.kafkaProducer.Send(ctx, transDeposit); prodErr != nil {
 		return ErrKafkaSend
 	}
 
@@ -88,7 +87,7 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.producer.Send(ctx, transWithdraw); prodErr != nil {
+	if prodErr := s.kafkaProducer.Send(ctx, transWithdraw); prodErr != nil {
 		return ErrKafkaSend
 	}
 	return nil
@@ -139,7 +138,7 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		ToCurrency:    toCur,
 		Rate:          rate,
 	}
-	if prodErr := s.producer.Send(ctx, transExchange); prodErr != nil {
+	if prodErr := s.kafkaProducer.Send(ctx, transExchange); prodErr != nil {
 		return ErrKafkaSend
 	}
 	return nil
