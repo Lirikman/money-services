@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/lib/pq"
 
+	c "github.com/Lirikman/money_services/internal/config"
 	"github.com/Lirikman/money_services/internal/logger"
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
 	"github.com/Lirikman/money_services/services/gw-exchanger/server"
@@ -41,18 +42,18 @@ func main() {
 		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
 	}
 
-	log := logger.NewLogger(getEnv("LOG_LEVEL", "INFO"))
+	log := logger.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
 
 	log.Info("Starting service Exchanger")
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 
 	// Подключение к PostgresQL
-	host := getEnv("DB_HOST", "localhost")
-	port := getEnv("DB_PORT", "5432")
-	user := getEnv("DB_USER", "postgres")
-	pass := getEnv("DB_PASSWORD", "secret")
-	name := getEnv("DB_NAME", "postgres")
-	migratePath := getEnv("DB_MIGRATIONS", "file://migrations")
+	host := c.GetEnv("DB_HOST", "localhost")
+	port := c.GetEnv("DB_PORT", "5432")
+	user := c.GetEnv("DB_USER", "postgres")
+	pass := c.GetEnv("DB_PASSWORD", "secret")
+	name := c.GetEnv("DB_NAME", "postgres")
+	migratePath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
 
 	conn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, pass, name)
 	db, err := sql.Open("postgres", conn)
@@ -137,16 +138,4 @@ func main() {
 	case <-stopped:
 		log.Info("Server gracefully stopped")
 	}
-}
-
-func getEnv(key, defaultValue string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		slog.Warn("Environment variable not set, using default",
-			slog.String("variable", key),
-			slog.String("default", defaultValue),
-		)
-		return defaultValue
-	}
-	return val
 }

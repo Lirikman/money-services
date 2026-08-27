@@ -12,6 +12,7 @@ import (
 	"github.com/rs/cors"
 
 	_ "github.com/Lirikman/money_services/docs"
+	c "github.com/Lirikman/money_services/internal/config"
 	logger "github.com/Lirikman/money_services/internal/logger"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
 	delivery "github.com/Lirikman/money_services/services/gw-currency-wallet/delivery"
@@ -47,17 +48,17 @@ func main() {
 	}
 
 	// инициализируем логгер
-	log := logger.NewLogger(getEnv("LOG_LEVEL", "INFO"))
+	log := logger.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 	log.Info("Starting service Currency-wallet")
 
 	// Чтение переменных окружения
-	dbURL := getEnv("DB_URL", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
-	grpcAddr := getEnv("EXCHANGE_GRPC_ADDR", "localhost:50051")
-	jwtSecret := getEnv("JWT_SECRET", "super_puper_secret_key")
-	migratePath := getEnv("DB_MIGRATIONS", "file://migrations")
-	kafkaBrokers := []string{getEnv("KAFKA_BROKERS", "localhost:9092")}
-	kafkaTopic := getEnv("KAFKA_TOPIC", "large-transfers")
+	dbURL := c.GetEnv("DB_URL", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
+	grpcAddr := c.GetEnv("EXCHANGE_GRPC_ADDR", "localhost:50051")
+	jwtSecret := c.GetEnv("JWT_SECRET", "super_puper_secret_key")
+	migratePath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
+	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
+	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "large-transfers")
 
 	// Подключение к PostgresQL
 	db, err := sql.Open("postgres", dbURL)
@@ -140,16 +141,4 @@ func main() {
 	if err := http.ListenAndServe(":8080", handlerWithCORS); err != nil {
 		log.Error("Server stopped", slog.Any("err", err))
 	}
-}
-
-func getEnv(key, defaultValue string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		slog.Warn("Environment variable not set, using default",
-			slog.String("variable", key),
-			slog.String("default", defaultValue),
-		)
-		return defaultValue
-	}
-	return val
 }

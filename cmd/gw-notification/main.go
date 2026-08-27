@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
+	c "github.com/Lirikman/money_services/internal/config"
 	l "github.com/Lirikman/money_services/internal/logger"
 	kafkaclient "github.com/Lirikman/money_services/services/gw-notification/kafka"
 	repository "github.com/Lirikman/money_services/services/gw-notification/repository/mongo"
@@ -34,19 +34,19 @@ func main() {
 	}
 
 	// подклчаем логгер
-	log := l.NewLogger(getEnv("LOG_LEVEL", "INFO"))
+	log := l.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 	log.Info("Starting gw-notification", slog.String("service", "gw-notification"))
 
 	// чтение переменных окружения
-	dbURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
-	dbName := getEnv("MONGO_DATABASE", "notification")
-	dbCollect := getEnv("MONGO_COLLECTION", "transactions")
-	kafkaBrokers := []string{getEnv("KAFKA_BROKERS", "localhost:9092")}
-	kafkaTopic := getEnv("KAFKA_TOPIC", "large-transfers")
-	kafkaGroupID := getEnv("KAFKA_GROUP_ID", "gw-notification")
-	batchSize := getEnvInt("BATCH_SIZE", 500)
-	batchTimeout := getEnvDuration("BATCH_TIMEOUT", 100*time.Millisecond)
+	dbURI := c.GetEnv("MONGO_URI", "mongodb://localhost:27017")
+	dbName := c.GetEnv("MONGO_DATABASE", "notification")
+	dbCollect := c.GetEnv("MONGO_COLLECTION", "transactions")
+	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
+	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "large-transfers")
+	kafkaGroupID := c.GetEnv("KAFKA_GROUP_ID", "gw-notification")
+	batchSize := c.GetEnvInt("BATCH_SIZE", 500)
+	batchTimeout := c.GetEnvDuration("BATCH_TIMEOUT", 100*time.Millisecond)
 
 	// контекст прослышивания системных сигналов
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -87,52 +87,4 @@ func main() {
 	}
 
 	log.Info("gw-notification stopped")
-}
-
-func getEnv(key, defaultValue string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		slog.Warn("Environment variable not set, using default",
-			slog.String("variable", key),
-			slog.String("default", defaultValue),
-		)
-		return defaultValue
-	}
-	return val
-}
-
-func getEnvInt(key string, defaultValue int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		slog.Warn("Environment variable not set, using default",
-			slog.String("variable", key),
-			slog.Int("default", defaultValue),
-		)
-		return defaultValue
-	}
-
-	result, err := strconv.Atoi(value)
-	if err != nil {
-		return defaultValue
-	}
-
-	return result
-}
-
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	value := os.Getenv(key)
-	if value == "" {
-		slog.Warn("Environment variable not set, using default",
-			slog.String("variable", key),
-			slog.Duration("default", defaultValue),
-		)
-		return defaultValue
-	}
-
-	result, err := time.ParseDuration(value)
-	if err != nil {
-		return defaultValue
-	}
-
-	return result
 }
