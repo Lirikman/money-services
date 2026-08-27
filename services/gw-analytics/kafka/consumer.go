@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Lirikman/money_services/services/gw-analytics/models"
+	"github.com/Lirikman/money_services/services/gw-analytics/service"
 	kafkaGo "github.com/segmentio/kafka-go"
 )
 
@@ -64,8 +65,8 @@ func (c *Consumer) Run(ctx context.Context) error {
 				slog.Int64("offset", message.Offset),
 			)
 
-			// offset НЕ коммитим.
-			// Kafka доставит сообщение повторно.
+			// offset НЕ коммитим
+			// Kafka доставит сообщение повторно
 			continue
 		}
 

@@ -16,5 +16,8 @@ run-svc2:
 run-svc3:
 	go run cmd/gw-notification/main.go -c cmd/gw-notification/config.env
 
+run-svc4:
+	go run cmd/gw-analytics/main.go -c cmd/gw-analytics/config.env
+
 swag-init:
 	swag init -d ./ -g cmd/gw-currency-wallet/main.go --parseInternal --parseDependency

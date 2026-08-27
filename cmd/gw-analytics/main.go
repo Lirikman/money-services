@@ -12,7 +12,7 @@ import (
 	c "github.com/Lirikman/money_services/internal/config"
 	l "github.com/Lirikman/money_services/internal/logger"
 	kafkaConsumer "github.com/Lirikman/money_services/services/gw-analytics/kafka"
-	"github.com/Lirikman/money_services/services/gw-analytics/repository"
+	repo "github.com/Lirikman/money_services/services/gw-analytics/repository/clickhouse"
 	"github.com/Lirikman/money_services/services/gw-analytics/service"
 	"github.com/joho/godotenv"
 )
@@ -44,7 +44,7 @@ func main() {
 	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
 	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "wallet-transactions")
 	kafkaGroupID := c.GetEnv("KAFKA_GROUP_ID", "gw-analytics")
-	aggrIntervalSec := c.GetEnvInt("AGGREGATION_INTERVAL_SECONDS", 60)
+	// aggrInterval := c.GetEnvInt("AGGREGATION_INTERVAL_SECONDS", 60)
 
 	log.Info("starting gw-analytics",
 		slog.String("kafka_topic", kafkaTopic),
@@ -55,7 +55,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	repo, err := repository.NewClickHouse(clickAddr, clickDB)
+	repo, err := repo.NewClickHouse(clickAddr, clickDB)
 	if err != nil {
 		log.Error("failed to create clickhouse repository", slog.Any("error", err))
 		os.Exit(1)
