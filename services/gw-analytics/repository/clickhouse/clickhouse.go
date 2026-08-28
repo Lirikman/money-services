@@ -78,3 +78,8 @@ func (r *ClickHouseRepository) SaveTransaction(ctx context.Context, event models
 		uint64(receivedAt.UnixNano()),
 	)
 }
+
+// Проверка ClickHouse
+func (r *ClickHouseRepository) Ping(ctx context.Context) error {
+	return r.conn.Ping(ctx)
+}

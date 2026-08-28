@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS analytics;
-
-
 CREATE TABLE IF NOT EXISTS analytics.transaction_events
 (
     transaction_id String,

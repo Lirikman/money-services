@@ -71,17 +71,18 @@ func main() {
 	driver, err := postgres.WithInstance(db, &postgres.Config{
 		MigrationsTable: "currency_wallet",
 	})
+
 	if err != nil {
 		log.Error("Failed to create migration driver", "err", err)
 	}
-	m, err := migrate.NewWithDatabaseInstance(
-		migratePath,
-		"postgres",
-		driver,
-	)
+
+	m, err := migrate.NewWithDatabaseInstance(migratePath, "postgres", driver)
+
 	if err != nil {
-		log.Error("Failed to initialize the migrator", "err", err)
+		log.Error("Failed to initialize the migrator", slog.Any("err", err))
 	}
+	defer m.Close()
+
 	if err := m.Up(); err != nil {
 		// если схема уже актуальна
 		if errors.Is(err, migrate.ErrNoChange) {

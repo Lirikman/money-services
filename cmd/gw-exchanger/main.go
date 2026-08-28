@@ -65,21 +65,22 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Error("database ping failed", "err", err)
 	}
+
 	// Применяем миграции
 	driver, err := postgres.WithInstance(db, &postgres.Config{
 		MigrationsTable: "exchanger",
 	})
+
 	if err != nil {
 		log.Error("Failed to create migration driver", "err", err)
 	}
-	m, err := migrate.NewWithDatabaseInstance(
-		migratePath,
-		"postgres",
-		driver,
-	)
+
+	m, err := migrate.NewWithDatabaseInstance(migratePath, "postgres", driver)
+
 	if err != nil {
 		log.Error("Failed to initialize the migrator", "err", err)
 	}
+
 	if err := m.Up(); err != nil {
 		// если схема уже актуальна
 		if errors.Is(err, migrate.ErrNoChange) {
@@ -90,6 +91,8 @@ func main() {
 	} else {
 		log.Info("Migrations successfully applied")
 	}
+	defer m.Close()
+
 	// Инициализация репозитория (pеализация postgres)
 	repo := repository.NewPostgresRepository(db)
 
