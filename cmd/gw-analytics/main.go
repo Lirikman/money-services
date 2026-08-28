@@ -51,7 +51,6 @@ func main() {
 	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "wallet-transactions")
 	kafkaGroupID := c.GetEnv("KAFKA_GROUP_ID", "gw-analytics")
 	migrationPath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
-	// aggrInterval := c.GetEnvInt("AGGREGATION_INTERVAL_SECONDS", 60)
 
 	log.Info("Starting gw-analytics",
 		slog.String("service", "gw-analytics"),
@@ -60,7 +59,7 @@ func main() {
 		slog.String("clickhouse", clickAddr),
 	)
 
-	// Отслеживаем системные сигналы
+	// контекст прослушивания системных сигналов
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -69,6 +68,7 @@ func main() {
 	if err != nil {
 		log.Error("database connection error", slog.Any("err", err))
 	}
+
 	// Создаем целевую БД, если её нет
 	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS analytics")
 	if err != nil {
