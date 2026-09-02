@@ -49,30 +49,24 @@ func (r *ClickHouseRepository) SaveTransaction(ctx context.Context, event models
 			user_id,
 			operation,
 			status,
-			amount,
-			currency,
 			created_at,
 			received_at,
-			latency_ms,
 			retry_count,
 			error,
 			version
 		)
 		VALUES
 		(
-			?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, 
+			?, ?, ?, ?, ?
 		)
 	`,
 		event.TransactionID,
 		event.UserID,
 		event.Operation,
 		event.Status,
-		event.Amount,
-		event.Currency,
 		event.CreatedAt,
 		receivedAt,
-		uint64(latency.Milliseconds()),
 		event.RetryCount,
 		event.Error,
 		uint64(receivedAt.UnixNano()),

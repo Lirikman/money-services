@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
@@ -55,8 +56,8 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.kafkaProducer.Send(ctx, transDeposit); prodErr != nil {
-		return ErrKafkaSend
+	if prodErr := s.kafkaProducer.SendNotification(ctx, transDeposit); prodErr != nil {
+		log.Println("transacion deposit - kafka send error:", prodErr)
 	}
 
 	return nil
@@ -87,8 +88,8 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.kafkaProducer.Send(ctx, transWithdraw); prodErr != nil {
-		return ErrKafkaSend
+	if prodErr := s.kafkaProducer.SendNotification(ctx, transWithdraw); prodErr != nil {
+		log.Println("transacion withdraw - kafka send error:", prodErr)
 	}
 	return nil
 }
@@ -138,8 +139,8 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		ToCurrency:    toCur,
 		Rate:          rate,
 	}
-	if prodErr := s.kafkaProducer.Send(ctx, transExchange); prodErr != nil {
-		return ErrKafkaSend
+	if prodErr := s.kafkaProducer.SendNotification(ctx, transExchange); prodErr != nil {
+		log.Println("transacion exchange - kafka send error:", prodErr)
 	}
 	return nil
 }

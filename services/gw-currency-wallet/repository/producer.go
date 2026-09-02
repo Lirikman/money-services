@@ -7,6 +7,7 @@ import (
 )
 
 type Producer interface {
-	Send(ctx context.Context, transfer models.Transaction) error
+	SendNotification(ctx context.Context, transfer models.Transaction) error
+	SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error
 	Close() error
 }

@@ -173,6 +173,8 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.log.Info("balance received successfully", slog.Int64("user_id", userID))
+
 	responseJSON(w, http.StatusOK, BalanceResponse{
 		Balance: wall,
 	})

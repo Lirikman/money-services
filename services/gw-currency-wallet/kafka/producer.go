@@ -11,25 +11,28 @@ import (
 )
 
 type kafkaProducer struct {
-	writer *kafkago.Writer
+	writer            *kafkago.Writer
+	notificationTopic string
+	analyticsTopic    string
 }
 
 // Создание нового продюсера
-func NewProducer(brokers []string, topic string) pr.Producer {
+func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.Producer {
 	return &kafkaProducer{
 		writer: &kafkago.Writer{
 			Addr:         kafkago.TCP(brokers...),
-			Topic:        topic,
 			BatchSize:    100,
 			BatchTimeout: 10 * time.Millisecond,
 			RequiredAcks: kafkago.RequireAll,
 			Balancer:     &kafkago.Murmur2Balancer{},
 		},
+		notificationTopic: notificationTopic,
+		analyticsTopic:    analyticsTopic,
 	}
 }
 
-// Отправка сообщений в kafka
-func (p *kafkaProducer) Send(ctx context.Context, transfer models.Transaction) error {
+// Отправка сообщений в kafka сервис Notification
+func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Transaction) error {
 	data, err := json.Marshal(transfer)
 
 	if err != nil {
@@ -37,7 +40,20 @@ func (p *kafkaProducer) Send(ctx context.Context, transfer models.Transaction) e
 	}
 
 	return p.writer.WriteMessages(ctx,
-		kafkago.Message{Key: []byte(transfer.TransactionID), Value: data},
+		kafkago.Message{Topic: p.notificationTopic, Key: []byte(transfer.TransactionID), Value: data},
+	)
+}
+
+// Отправка сообщений в kafka сервис Analytics
+func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error {
+	data, err := json.Marshal(analytics)
+
+	if err != nil {
+		return err
+	}
+
+	return p.writer.WriteMessages(ctx,
+		kafkago.Message{Topic: p.analyticsTopic, Key: []byte(analytics.TransactionID), Value: data},
 	)
 }
 

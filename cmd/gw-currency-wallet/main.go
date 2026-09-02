@@ -57,8 +57,9 @@ func main() {
 	grpcAddr := c.GetEnv("EXCHANGE_GRPC_ADDR", "localhost:50051")
 	jwtSecret := c.GetEnv("JWT_SECRET", "super_puper_secret_key")
 	migratePath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
+	notificationTopic := c.GetEnv("KAFKA_NOTIFICATION_TOPIC", "large-transfers")
+	analyticsTopic := c.GetEnv("KAFKA_ANALYTICS_TOPIC", "wallet-transactions")
 	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
-	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "large-transfers")
 
 	// Подключение к PostgresQL
 	db, err := sql.Open("postgres", dbURL)
@@ -104,7 +105,7 @@ func main() {
 	// Сборка слоев приложения
 	repoWall := repository.NewPostgresWalletRepository(db)
 	repoUsr := repository.NewPostgresUserRepository(db)
-	writer := kafka.NewProducer(kafkaBrokers, kafkaTopic)
+	writer := kafka.NewProducer(kafkaBrokers, notificationTopic, analyticsTopic)
 	svc := service.NewWalletService(repoWall, grpcClient, writer)
 	usr := service.NewUserService(repoUsr, jwtSecret)
 	h := delivery.NewHandler(svc, usr, log)
