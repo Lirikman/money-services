@@ -39,7 +39,7 @@ func main() {
 	log.Info("Starting gw-notification", slog.String("service", "gw-notification"))
 
 	// чтение переменных окружения
-	dbURI := c.GetEnv("MONGO_URI", "mongodb://localhost:27017")
+	dbURI := c.GetEnv("MONGO_URI", "mongodb://root:secret@localhost:27017/mydb?authSource=admin")
 	dbName := c.GetEnv("MONGO_DATABASE", "notification")
 	dbCollect := c.GetEnv("MONGO_COLLECTION", "transactions")
 	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
