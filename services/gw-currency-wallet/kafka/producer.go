@@ -25,6 +25,7 @@ func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.
 			BatchTimeout: 10 * time.Millisecond,
 			RequiredAcks: kafkago.RequireAll,
 			Balancer:     &kafkago.Murmur2Balancer{},
+			WriteTimeout: 5 * time.Second,
 		},
 		notificationTopic: notificationTopic,
 		analyticsTopic:    analyticsTopic,
@@ -40,7 +41,11 @@ func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Tr
 	}
 
 	return p.writer.WriteMessages(ctx,
-		kafkago.Message{Topic: p.notificationTopic, Key: []byte(transfer.TransactionID), Value: data},
+		kafkago.Message{
+			Topic: p.notificationTopic,
+			Key:   []byte(transfer.TransactionID),
+			Value: data,
+		},
 	)
 }
 
@@ -53,7 +58,11 @@ func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.Tran
 	}
 
 	return p.writer.WriteMessages(ctx,
-		kafkago.Message{Topic: p.analyticsTopic, Key: []byte(analytics.TransactionID), Value: data},
+		kafkago.Message{
+			Topic: p.analyticsTopic,
+			Key:   []byte(analytics.TransactionID),
+			Value: data,
+		},
 	)
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"time"
 
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
@@ -43,21 +44,41 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 	if err := s.repo.Deposit(ctx, userID, currency, amount); err != nil {
 		return err
 	}
-	// отправляем сообщение в kafka
+	// отправляем сообщения в kafka
 	transID, err := genTransID()
 	if err != nil {
 		return err
 	}
+	transIDStr := transID.String()
+	userIDStr := strconv.FormatInt(userID, 10)
 
-	transDeposit := models.Transaction{
-		TransactionID: transID.String(),
-		UserID:        strconv.FormatInt(userID, 10),
+	// сообщение для сервиса Notification
+	notificationEvent := models.Transaction{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
 		Operation:     "deposit",
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.kafkaProducer.SendNotification(ctx, transDeposit); prodErr != nil {
-		log.Println("transacion deposit - kafka send error:", prodErr)
+	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
+		log.Println("transacion deposit - kafka send notification error:", prodErr)
+	}
+
+	// сообщение для сервиса Analytics
+	analyticsEvent := models.TransactionEvent{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
+		Operation:     "deposit",
+		CreatedAt:     time.Now().UTC(),
+		Status:        "success",
+		RetryCount:    0,
+		Error:         "",
+	}
+	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
+		log.Println("transaction deposit - kafka send analytics error:", prodErr)
+
+		// Запускаем ретраи асинхронно в goroutine
+		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	}
 
 	return nil
@@ -80,17 +101,38 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 	if err != nil {
 		return err
 	}
+	transIDStr := transID.String()
+	userIDStr := strconv.FormatInt(userID, 10)
 
-	transWithdraw := models.Transaction{
-		TransactionID: transID.String(),
-		UserID:        strconv.FormatInt(userID, 10),
+	// сообщение для сервиса Notification
+	notificationEvent := models.Transaction{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
 		Operation:     "withdraw",
 		Amount:        amount,
 		Currency:      currency,
 	}
-	if prodErr := s.kafkaProducer.SendNotification(ctx, transWithdraw); prodErr != nil {
-		log.Println("transacion withdraw - kafka send error:", prodErr)
+	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
+		log.Println("transacion withdraw - kafka send notification error:", prodErr)
 	}
+
+	// сообщение для сервиса Analytics
+	analyticsEvent := models.TransactionEvent{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
+		Operation:     "withdraw",
+		CreatedAt:     time.Now().UTC(),
+		Status:        "success",
+		RetryCount:    0,
+		Error:         "",
+	}
+	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
+		log.Println("transaction withdraw - kafka send analytics error:", prodErr)
+
+		// Запускаем ретраи асинхронно в goroutine
+		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+	}
+
 	return nil
 }
 
@@ -128,10 +170,13 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 	if err != nil {
 		return err
 	}
+	transIDStr := transID.String()
+	userIDStr := strconv.FormatInt(userID, 10)
 
-	transExchange := models.Transaction{
-		TransactionID: transID.String(),
-		UserID:        strconv.FormatInt(userID, 10),
+	// сообщение для сервиса Notification
+	notificationEvent := models.Transaction{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
 		Operation:     "exchange",
 		Amount:        amount,
 		Currency:      fromCur,
@@ -139,9 +184,27 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		ToCurrency:    toCur,
 		Rate:          rate,
 	}
-	if prodErr := s.kafkaProducer.SendNotification(ctx, transExchange); prodErr != nil {
-		log.Println("transacion exchange - kafka send error:", prodErr)
+	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
+		log.Println("transacion exchange - kafka send notification error:", prodErr)
 	}
+
+	// сообщение для сервиса Analytics
+	analyticsEvent := models.TransactionEvent{
+		TransactionID: transIDStr,
+		UserID:        userIDStr,
+		Operation:     "exchange",
+		CreatedAt:     time.Now().UTC(),
+		Status:        "success",
+		RetryCount:    0,
+		Error:         "",
+	}
+	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
+		log.Println("transaction exchange - kafka send analytics error:", prodErr)
+
+		// Запускаем ретраи асинхронно в goroutine
+		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+	}
+
 	return nil
 }
 
@@ -160,4 +223,41 @@ func genTransID() (uuid.UUID, error) {
 		return uuid.Nil, ErrGenTransactionID
 	}
 	return transID, nil
+}
+
+// обработка ретраев
+func (s *WalletService) retrySendAnalytics(ctx context.Context, event models.TransactionEvent, initialError string) {
+	const maxRetries = 5
+
+	// задаём начальную паузу между попытками
+	backoff := 1 * time.Second
+
+	event.Status = "error"
+	event.Error = initialError
+
+	for event.RetryCount < maxRetries {
+		event.RetryCount++
+		event.CreatedAt = time.Now().UTC()
+
+		select {
+		case <-ctx.Done():
+			log.Printf("retry context canceled for tx %s", event.TransactionID)
+			return
+		case <-time.After(backoff):
+		}
+
+		log.Printf("retrying analytics send for tx %s (attempt %d/%d)...", event.TransactionID, event.RetryCount, maxRetries)
+
+		if err := s.kafkaProducer.SendAnalytics(ctx, event); err == nil {
+			log.Printf("analytics event for tx %s successfully sent after %d retries", event.TransactionID, event.RetryCount)
+			return
+		} else {
+			event.Error = err.Error()
+			backoff *= 2 // Увеличиваем паузу в 2 раза
+		}
+	}
+
+	// / если все попытки исчерпаны
+	log.Printf("CRITICAL: failed to send analytics for tx %s after %d attempts. Last error: %s",
+		event.TransactionID, maxRetries, event.Error)
 }
