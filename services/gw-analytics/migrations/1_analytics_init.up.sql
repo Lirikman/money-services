@@ -3,8 +3,6 @@ CREATE TABLE IF NOT EXISTS analytics.transaction_events
     transaction_id String,
     user_id String,
     operation LowCardinality(String),
-    amount Float64,
-    currency LowCardinality(String),
     created_at DateTime64(3, 'UTC'),
     received_at DateTime64(3, 'UTC'),
     latency_ms Int64 MATERIALIZED dateDiff('ms', created_at, received_at),
