@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -14,66 +15,100 @@ type ClickHouseRepository struct {
 
 // Создание нового репозитория clickHouse
 // Подключение к БД
-func NewClickHouse(addr, database string) (*ClickHouseRepository, error) {
+func NewClickHouse(addr, database, username, password string) (*ClickHouseRepository, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{addr},
 
 		Auth: clickhouse.Auth{
 			Database: database,
-			Username: "default",
-			Password: "",
+			Username: username,
+			Password: password,
 		},
+
+		Settings: clickhouse.Settings{
+			"max_execution_time": 60,
+		},
+
+		DialTimeout: 5 * time.Second,
 	})
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &ClickHouseRepository{
-		conn: conn,
-	}, nil
-}
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
 
-// Сохранение транзакции
-func (r *ClickHouseRepository) SaveTransaction(ctx context.Context, event models.TransactionEvent, receivedAt time.Time) error {
-	latency := receivedAt.Sub(event.CreatedAt)
-
-	if latency < 0 {
-		latency = 0
+	if err := conn.Ping(ctx); err != nil {
+		return nil, err
 	}
 
-	return r.conn.Exec(ctx, `
-		INSERT INTO analytics.transaction_events
-		(
-			transaction_id,
-			user_id,
-			operation,
-			status,
-			created_at,
-			received_at,
-			retry_count,
-			error,
-			version
-		)
-		VALUES
-		(
-			?, ?, ?, ?, ?, 
-			?, ?, ?, ?, ?
-		)
-	`,
-		event.TransactionID,
-		event.UserID,
-		event.Operation,
-		event.Status,
-		event.CreatedAt,
-		receivedAt,
-		event.RetryCount,
-		event.Error,
-		uint64(receivedAt.UnixNano()),
-	)
+	return &ClickHouseRepository{conn: conn}, nil
 }
 
-// Проверка ClickHouse
+// Пакетное сохранение событий
+func (r *ClickHouseRepository) SaveTransactionBatch(ctx context.Context, events []models.TransactionEvent, receivedAt time.Time) error {
+	// Инициализируем пакетную вставку
+	batch, err := r.conn.PrepareBatch(ctx, `
+		INSERT INTO analytics.transaction_events 
+		(
+			transaction_id, 
+			user_id, 
+			operation, 
+			status, 
+			created_at, 
+			received_at, 
+			latency_ms, 
+			retry_count, 
+			error, 
+			version
+		)
+	`)
+
+	if err != nil {
+		return fmt.Errorf("failed to prepare clickhouse batch: %w", err)
+	}
+
+	defer func() {
+		_ = batch.Abort()
+	}()
+
+	// Наполняем пакет данными в цикле
+	for _, event := range events {
+		// Расчет задержки доставки
+		latencySub := max(receivedAt.Sub(event.CreatedAt), 0)
+		latencyMs := int64(latencySub.Milliseconds())
+
+		// Добавляем строку в буфер пакета.
+		err = batch.Append(
+			event.TransactionID,
+			event.UserID,
+			event.Operation,
+			event.Status,
+			event.CreatedAt,
+			receivedAt,
+			latencyMs,
+			event.RetryCount,
+			event.Error,
+			uint64(receivedAt.UnixNano()),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to append row to clickhouse batch: %w", err)
+		}
+	}
+
+	// Отправляем всю пачку в ClickHouse
+	if err := batch.Send(); err != nil {
+		return fmt.Errorf("failed to send batch to clickhouse: %w", err)
+	}
+
+	return nil
+}
+
+// Проверка запуска ClickHouse
 func (r *ClickHouseRepository) Ping(ctx context.Context) error {
 	return r.conn.Ping(ctx)
 }

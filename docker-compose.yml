@@ -13,7 +13,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   mongo:
-    image: mongo:7.0
+    image: mongo:8.3
     container_name: mongodb
     restart: always
     ports:
@@ -30,6 +30,15 @@ services:
     ports:
       - "8123:8123" 
       - "9000:9000"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      - CLICKHOUSE_DB=analytics
+      - CLICKHOUSE_USER=analytics
+      - CLICKHOUSE_PASSWORD=analytics_password
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - clickhouse-logs:/var/log/clickhouse-server

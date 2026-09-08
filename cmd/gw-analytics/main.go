@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/database/clickhouse"
 
@@ -47,6 +45,8 @@ func main() {
 	// чтение переменных окружения
 	clickAddr := c.GetEnv("CLICKHOUSE_ADDR", "localhost:9000")
 	clickDB := c.GetEnv("CLICKHOUSE_DB", "default")
+	clickUser := c.GetEnv("CLICKHOUSE_USER", "default")
+	clickPass := c.GetEnv("CLICKHOUSE_PASSWORD", "password")
 	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
 	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "wallet-transactions")
 	kafkaGroupID := c.GetEnv("KAFKA_GROUP_ID", "gw-analytics")
@@ -63,36 +63,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Подключение к Clickhouse
-	db, err := sql.Open("clickhouse", "clickhouse://localhost:9000/default")
-	if err != nil {
-		log.Error("database connection error", slog.Any("err", err))
-	}
-
-	// Создаем целевую БД, если её нет
-	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS analytics")
-	if err != nil {
-		log.Error("database creation error", slog.Any("err", err))
-	}
-	db.Close()
-
 	// Создаём репозиторий
-	repo, err := repo.NewClickHouse(clickAddr, clickDB)
+	repo, err := repo.NewClickHouse(clickAddr, clickDB, clickUser, clickPass)
 	if err != nil {
 		log.Error("failed to create clickhouse repository", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	pingCtx, pingCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer pingCancel()
-
-	if err := repo.Ping(pingCtx); err != nil {
-		log.Error("clickhouse is unavailable", slog.Any("error", err))
-		os.Exit(1)
-	}
-
 	// Применение миграций
-	dsn := fmt.Sprintf("clickhouse://%s/%s?x-multi-statement=true", clickAddr, clickDB)
+	dsn := fmt.Sprintf("clickhouse://%s:%s@%s/%s?x-multi-statement=true", clickUser, clickPass, clickAddr, clickDB)
 	m, err := migrate.New(migrationPath, dsn)
 	if err != nil {
 		slog.Error("Failed to initialize the migrator", slog.Any("error", err))
@@ -125,6 +104,7 @@ func main() {
 
 	log.Info("gw-analytics started")
 
+	// Запускаем сервис
 	if err := consumer.Run(ctx); err != nil {
 		log.Error("consumer stopped", slog.Any("error", err))
 	}

@@ -19,7 +19,10 @@ func NewAnalyticsService(repository *repository.ClickHouseRepository) *Analytics
 	}
 }
 
-// Запуск сохранения транзакций
-func (s *AnalyticsService) Process(ctx context.Context, event models.TransactionEvent, receivedAt time.Time) error {
-	return s.repository.SaveTransaction(ctx, event, receivedAt)
+// Запуск сохранения событий
+func (s *AnalyticsService) ProcessBatch(ctx context.Context, events []models.TransactionEvent, receivedAt time.Time) error {
+	if len(events) == 0 {
+		return nil
+	}
+	return s.repository.SaveTransactionBatch(ctx, events, receivedAt)
 }

@@ -99,7 +99,6 @@ func (s *NotificationService) Run(ctx context.Context) error {
 			}
 
 			s.logger.Error("failed to fetch kafka message", slog.Any("error", err))
-
 			continue
 		}
 
