@@ -1,5 +1,5 @@
 services:
-  postgres:
+  postgres-db:
     image: postgres:15-alpine
     container_name: postgres
     restart: always
@@ -11,6 +11,30 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - my-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d exchanger_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gw-exchanger:
+    build:
+      context: .               
+      dockerfile: Dockerfile
+    container_name: gw-exchanger-svc
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - DATABASE_URL=postgres://postgres:strong_password@postgres-db:5432/mydb?sslmode=disable
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - my-network
 
   mongo:
     image: mongo:8.3
@@ -76,6 +100,10 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     depends_on:
       - kafka
+
+networks:
+  my-network:
+    driver: bridge
 
 volumes:
   pgdata:
