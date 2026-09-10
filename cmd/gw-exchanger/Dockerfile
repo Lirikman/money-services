@@ -1,5 +1,5 @@
 # Stage 1: Build binary
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 COPY --from=builder /app/exchanger-bin ./main
-COPY --from=builder /app/services/gw-exchanger/config.env .
+COPY --from=builder /app/cmd/gw-exchanger/config.env .
 
 EXPOSE 50051
 

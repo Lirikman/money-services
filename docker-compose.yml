@@ -22,7 +22,7 @@ services:
   gw-exchanger:
     build:
       context: .               
-      dockerfile: Dockerfile
+      dockerfile: ./cmd/gw-exchanger/Dockerfile
     container_name: gw-exchanger-svc
     ports:
       - "50051:50051"
