@@ -14,7 +14,7 @@ services:
     networks:
       - my-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d exchanger_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydb"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,21 +24,36 @@ services:
       context: .               
       dockerfile: ./cmd/gw-exchanger/Dockerfile
     container_name: gw-exchanger-svc
+    env_file:
+      - ./cmd/gw-exchanger/config.env
     ports:
       - "50051:50051"
-    environment:
-      - GRPC_PORT=50051
-      - DATABASE_URL=postgres://postgres:strong_password@postgres-db:5432/mydb?sslmode=disable
-      - LOG_LEVEL=debug
     depends_on:
       postgres-db:
         condition: service_healthy
     networks:
       - my-network
+  
+  gw-currency-wallet:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-currency-wallet/Dockerfile
+    container_name: gw-wallet-svc
+    env_file:
+      - ./cmd/gw-currency-wallet/config.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      kafka-brokers:
+        condition: service_healthy
+    networks:
+      - my-network
 
-  mongo:
-    image: mongo:8.3
-    container_name: mongodb
+  mongo-db:
+    image: mongo:7.0
+    container_name: mongo
     restart: always
     ports:
       - "27017:27017"
@@ -47,15 +62,37 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: secret
     volumes:
       - mongo_data:/data/db
+    networks:
+      - my-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
       
-  clickhouse:
+  gw-notification:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-notification/Dockerfile
+    container_name: gw-notification-svc
+    env_file:
+      - ./cmd/gw-notification/config.env
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+      kafka-brokers:
+        condition: service_healthy
+    networks:
+      - my-network
+
+  clickhouse-db:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse-server
     ports:
       - "8123:8123" 
       - "9000:9000"
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -71,8 +108,25 @@ services:
         soft: 262144
         hard: 262144
     restart: unless-stopped
+    networks:
+      - my-network
+  
+  gw-analytics:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-analytics/Dockerfile
+    container_name: gw-analytics-svc
+    env_file:
+      - ./cmd/gw-analytics/config.env
+    depends_on:
+      clickhouse-db:
+        condition: service_healthy
+      kafka-brokers:
+        condition: service_healthy
+    networks:
+      - my-network
 
-  kafka:
+  kafka-brokers:
     image: apache/kafka:4.0.0
     container_name: kafka
     ports:
@@ -89,6 +143,14 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - my-network
 
   ui:
     image: provectuslabs/kafka-ui:latest
@@ -99,7 +161,9 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     depends_on:
-      - kafka
+      - kafka-brokers
+    networks:
+      - my-network
 
 networks:
   my-network:
