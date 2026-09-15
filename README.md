@@ -135,12 +135,17 @@ Kafka UI будет доступен по адресу:
 Сервис защищен авторизацией на базе JWT.
 
 **Схема работы:**
+
 Клиент отправляет запрос на /api/v1/login (REST).
+
 Сервис проверяет данные и возвращает access_token.
+
 Все остальные эндпоинты требуют передачи токена.
 
 **Как передавать токен:**
+
 В REST: Через HTTP-заголовок Authorization: Bearer <ваш_токен>. 
+
 Обрабатывается через Middleware.
 
 ### Запуск приложения (без Docker)
@@ -221,16 +226,15 @@ http://127.0.0.1:8080/api/v1
 **Пример тела запроса:**
 ```json 
 {  
- "username": "petrov_20",  
- "password": "SuPer!Sec12reT00pas"  
+  "username": "petrov_20",
+  "password": "SuPer!Sec12reT00pas"
 } 
 ```
    
 **Пример ответа:**
 ```json
-
-{  
-   "token": "JWT_TOKEN"  
+{
+  "token": "JWT_TOKEN"
 } 
 ```   
 • Успех: 200 OK  
@@ -238,10 +242,10 @@ http://127.0.0.1:8080/api/v1
 или
 
 ```json
-{  
-   "error": "Invalid username or password"  
+{
+  "error": "Invalid username or password"
 }
-``` 
+```
 • Ошибка: 401 Unauthorized  
 
 ### Получение баланса пользователя
