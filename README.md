@@ -9,7 +9,9 @@
   * **gw-analytics** - для аналитики денежных операций
 
 Сервисы gw-currency-wallet и gw-exchanger общаются по ппотоколу gRPC.
+
 Сервис gw-currency-wallet отправляет данные о транзакциях в брокер сообщений Kafka.
+
 Сервисы gw-notification и gw-analytics читают сообщения из Kafka.
 
 ## Предварительные требования
@@ -32,8 +34,9 @@
 ```
 
 3. Проверьте работу:
+   
 После успешного запуска приложение будет доступно по адресу:
-  👉 http://127.0.0.1:8080/api/v1
+   👉 http://127.0.0.1:8080/api/v1
 
 Документация swagger для REST-API:
   👉 http://localhost:8080/api/v1/swagger/index.html
