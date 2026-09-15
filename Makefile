@@ -1,7 +1,7 @@
 clean:
 	rm proto-exchange/generate/*
 
-gen:
+generate:
 	protoc --proto_path=proto-exchange/exchange \
 		--go_out=proto-exchange/generate --go_opt=paths=source_relative \
 		--go-grpc_out=proto-exchange/generate --go-grpc_opt=paths=source_relative \
