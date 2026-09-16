@@ -256,7 +256,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Balance has been successfully replenished",
                         "schema": {
-                            "$ref": "#/definitions/services_gw-currency-wallet_delivery.DeptWithResponse"
+                            "$ref": "#/definitions/services_gw-currency-wallet_delivery.DeptResponse"
                         }
                     },
                     "400": {
@@ -306,7 +306,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Funds have been successfully withdrawn",
                         "schema": {
-                            "$ref": "#/definitions/services_gw-currency-wallet_delivery.DeptWithResponse"
+                            "$ref": "#/definitions/services_gw-currency-wallet_delivery.WithResponse"
                         }
                     },
                     "400": {
@@ -342,12 +342,12 @@ const docTemplate = `{
                 }
             }
         },
-        "services_gw-currency-wallet_delivery.DeptWithResponse": {
+        "services_gw-currency-wallet_delivery.DeptResponse": {
             "type": "object",
             "properties": {
                 "message": {
                     "type": "string",
-                    "example": "deposit successful or withdrawal successful"
+                    "example": "Account topped up successfully"
                 },
                 "new_balance": {
                     "type": "object",
@@ -380,7 +380,7 @@ const docTemplate = `{
                 },
                 "message": {
                     "type": "string",
-                    "example": "currency exchange successful"
+                    "example": "Exchange successful"
                 },
                 "new_balance": {
                     "type": "object",
@@ -428,6 +428,26 @@ const docTemplate = `{
                 "message": {
                     "type": "string",
                     "example": "User registered successfully"
+                }
+            }
+        },
+        "services_gw-currency-wallet_delivery.WithResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "Withdrawal successful"
+                },
+                "new_balance": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        "EUR": "100.00",
+                        "RUB": "3000.00",
+                        "USD": "500.00"
+                    }
                 }
             }
         },

@@ -185,8 +185,13 @@ type walletReq struct {
 	Amount   float64 `json:"amount" example:"3500"`
 }
 
-type DeptWithResponse struct {
-	Message    string            `json:"message" example:"deposit successful or withdrawal successful"`
+type DeptResponse struct {
+	Message    string            `json:"message" example:"Account topped up successfully"`
+	NewBalance map[string]string `json:"new_balance" example:"EUR:100.00,RUB:3000.00,USD:500.00"`
+}
+
+type WithResponse struct {
+	Message    string            `json:"message" example:"Withdrawal successful"`
 	NewBalance map[string]string `json:"new_balance" example:"EUR:100.00,RUB:3000.00,USD:500.00"`
 }
 
@@ -197,9 +202,9 @@ type DeptWithResponse struct {
 // @Produce      json
 // @Param        Authorization  header    string          true  "Authorization token (Bearer <token>)"
 // @Param        request        body      walletReq       true  "Details for replenishment (amount and currency)"
-// @Success      200            {object}  DeptWithResponse      "Balance has been successfully replenished"
-// @Failure      400            {object}  ErrorResponse         "Invalid request format, negative amount, or invalid currency"
-// @Failure      500            {object}  ErrorResponse         "Internal Server Error"
+// @Success      200            {object}  DeptResponse    "Balance has been successfully replenished"
+// @Failure      400            {object}  ErrorResponse   "Invalid request format, negative amount, or invalid currency"
+// @Failure      500            {object}  ErrorResponse   "Internal Server Error"
 // @Router       /wallet/deposit [post]
 func (h *Handler) Deposit(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -252,7 +257,7 @@ func (h *Handler) Deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseJSON(w, http.StatusOK, DeptWithResponse{
+	responseJSON(w, http.StatusOK, DeptResponse{
 		Message:    "Account topped up successfully",
 		NewBalance: newBalance,
 	})
@@ -265,9 +270,9 @@ func (h *Handler) Deposit(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        Authorization  header    string          true  "Authorization token (Bearer <token>)"
 // @Param        request        body      walletReq       true  "Withdrawal details (amount and currency)"
-// @Success      200            {object}  DeptWithResponse      "Funds have been successfully withdrawn"
-// @Failure      400            {object}  ErrorResponse         "Invalid request format, negative amount, invalid currency, or insufficient funds"
-// @Failure      500            {object}  ErrorResponse         "Internal Server Error"
+// @Success      200            {object}  WithResponse    "Funds have been successfully withdrawn"
+// @Failure      400            {object}  ErrorResponse   "Invalid request format, negative amount, invalid currency, or insufficient funds"
+// @Failure      500            {object}  ErrorResponse   "Internal Server Error"
 // @Router       /wallet/withdraw [post]
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -320,7 +325,7 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseJSON(w, http.StatusOK, DeptWithResponse{
+	responseJSON(w, http.StatusOK, WithResponse{
 		Message:    "Withdrawal successful",
 		NewBalance: newBalance,
 	})
@@ -333,8 +338,8 @@ type exchangeReq struct {
 }
 
 type ExchangeResponse struct {
-	Message         string            `json:"message" example:"currency exchange successful"`
-	ExchangedAmount float64           `json:"exchanged_amount" example:"300"`
+	Message         string            `json:"message" example:"Exchange successful"`
+	ExchangedAmount float64           `json:"exchanged_amount" example:"300.00"`
 	NewBalance      map[string]string `json:"new_balance" example:"EUR:100.00,RUB:3000.00,USD:500.00"`
 }
 
