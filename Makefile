@@ -21,3 +21,9 @@ run-svc4:
 
 swag-init:
 	swag init -d ./ -g cmd/gw-currency-wallet/main.go --parseInternal --parseDependency
+
+run:
+	docker compose up -d
+
+stop:
+	docker compose down
