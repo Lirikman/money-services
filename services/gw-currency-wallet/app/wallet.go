@@ -61,7 +61,9 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		Currency:      currency,
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
-		log.Println("transacion deposit - kafka send notification error:", prodErr)
+		log.Printf("transaction deposit - kafka send notification error: %v", prodErr)
+	} else {
+		log.Printf("transaction deposit - kafka send notification successful for ID: %s", transIDStr)
 	}
 
 	// сообщение для сервиса Analytics
@@ -75,10 +77,12 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		Error:         "",
 	}
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
-		log.Println("transaction deposit - kafka send analytics error:", prodErr)
+		log.Printf("transaction deposit - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
 		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+	} else {
+		log.Printf("transaction deposit - kafka send analytics successful for ID: %s", transIDStr)
 	}
 
 	return nil
@@ -113,7 +117,9 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		Currency:      currency,
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
-		log.Println("transacion withdraw - kafka send notification error:", prodErr)
+		log.Printf("transaction withdraw - kafka send notification error: %v", prodErr)
+	} else {
+		log.Printf("transaction withdraw - kafka send notification successful for ID: %s", transIDStr)
 	}
 
 	// сообщение для сервиса Analytics
@@ -127,10 +133,12 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		Error:         "",
 	}
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
-		log.Println("transaction withdraw - kafka send analytics error:", prodErr)
+		log.Printf("transaction withdraw - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
 		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+	} else {
+		log.Printf("transaction withdraw - kafka send analytics successful for ID: %s", transIDStr)
 	}
 
 	return nil
@@ -185,7 +193,9 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		Rate:          rate,
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
-		log.Println("transacion exchange - kafka send notification error:", prodErr)
+		log.Printf("transacion exchange - kafka send notification error: %v", prodErr)
+	} else {
+		log.Printf("transaction exchange - kafka send notification successful for ID: %s", transIDStr)
 	}
 
 	// сообщение для сервиса Analytics
@@ -199,10 +209,12 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		Error:         "",
 	}
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
-		log.Println("transaction exchange - kafka send analytics error:", prodErr)
+		log.Printf("transaction exchange - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
 		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+	} else {
+		log.Printf("transaction exchange - kafka send analytics successful for ID: %s", transIDStr)
 	}
 
 	return nil
