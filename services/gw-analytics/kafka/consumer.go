@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -30,8 +31,17 @@ func NewConsumer(brokers []string, topic string, groupID string, svc *service.An
 
 		MinBytes: 1,
 		MaxBytes: 10e6,
+		MaxWait:  100 * time.Millisecond,
 
-		CommitInterval: 0,
+		CommitInterval:    0,
+		RebalanceTimeout:  30 * time.Second,
+		HeartbeatInterval: 3 * time.Second,
+		Dialer: &kafkaGo.Dialer{
+			Timeout:   10 * time.Second,
+			DualStack: true,
+		},
+		Logger:      kafkaGo.LoggerFunc(func(msg string, args ...any) { log.Info(fmt.Sprintf("KAFKA INFO: "+msg, args...)) }),
+		ErrorLogger: kafkaGo.LoggerFunc(func(msg string, args ...any) { log.Warn(fmt.Sprintf("KAFKA WARN: "+msg, args...)) }),
 	})
 
 	return &Consumer{

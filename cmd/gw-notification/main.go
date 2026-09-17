@@ -46,7 +46,7 @@ func main() {
 	kafkaTopic := c.GetEnv("KAFKA_TOPIC", "large-transfers")
 	kafkaGroupID := c.GetEnv("KAFKA_GROUP_ID", "gw-notification")
 	batchSize := c.GetEnvInt("BATCH_SIZE", 500)
-	batchTimeout := c.GetEnvDuration("BATCH_TIMEOUT", 100*time.Millisecond)
+	batchTimeout := c.GetEnvDuration("BATCH_TIMEOUT", 500*time.Millisecond)
 
 	// контекст прослышивания системных сигналов
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -61,7 +61,7 @@ func main() {
 	}
 
 	// Создаём консьюмера
-	consumer := kafkaclient.NewConsumer(kafkaBrokers, kafkaTopic, kafkaGroupID)
+	consumer := kafkaclient.NewConsumer(kafkaBrokers, kafkaTopic, kafkaGroupID, log)
 
 	// Создаём сервис сохранения денежных переводов
 	svc := service.NewNotificationService(consumer, repo, log, batchSize, batchTimeout)

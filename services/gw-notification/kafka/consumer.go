@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -10,49 +11,75 @@ import (
 
 type Consumer struct {
 	reader *kafka.Reader
+	logger *slog.Logger
 }
 
 // Создание нового консьюмера
 // Ручной коммит прочитанных сообщений
-func NewConsumer(brokers []string, topic string, groupID string) *Consumer {
+func NewConsumer(brokers []string, topic string, groupID string, log *slog.Logger) *Consumer {
 	reader := kafka.NewReader(
 		kafka.ReaderConfig{
-			Brokers:        brokers,
-			Topic:          topic,
-			GroupID:        groupID,
-			MinBytes:       1,
-			MaxBytes:       10e6,
-			MaxWait:        100 * time.Millisecond,
-			CommitInterval: 0,
-			StartOffset:    kafka.FirstOffset,
+			Brokers:           brokers,
+			Topic:             topic,
+			GroupID:           groupID,
+			MinBytes:          1,
+			MaxBytes:          10e6,
+			MaxWait:           100 * time.Millisecond,
+			CommitInterval:    0,
+			StartOffset:       kafka.FirstOffset,
+			RebalanceTimeout:  30 * time.Second,
+			HeartbeatInterval: 3 * time.Second,
+			Dialer: &kafka.Dialer{
+				Timeout:   10 * time.Second,
+				DualStack: true,
+			},
+			Logger:      kafka.LoggerFunc(func(msg string, args ...any) { log.Info(fmt.Sprintf("KAFKA INFO: "+msg, args...)) }),
+			ErrorLogger: kafka.LoggerFunc(func(msg string, args ...any) { log.Warn(fmt.Sprintf("KAFKA WARN: "+msg, args...)) }),
 		},
 	)
 
 	return &Consumer{
 		reader: reader,
+		logger: log,
 	}
 }
 
 // Получение сообщения из kafka
 func (c *Consumer) Fetch(ctx context.Context) (kafka.Message, error) {
 	message, err := c.reader.FetchMessage(ctx)
-
 	if err != nil {
+		c.logger.ErrorContext(ctx, "failed to fetch kafka message", "error", err)
 		return kafka.Message{}, fmt.Errorf("fetch kafka message: %w", err)
 	}
-
 	return message, nil
 }
 
 // Коммит прочитанных сообщений
 func (c *Consumer) Commit(ctx context.Context, messages ...kafka.Message) error {
 	if err := c.reader.CommitMessages(ctx, messages...); err != nil {
+		c.logger.ErrorContext(ctx, "failed to commit kafka offsets", "error", err, "count", len(messages))
 		return fmt.Errorf("commit kafka offset: %w", err)
+	}
+	// если одно сообщение
+	if len(messages) == 1 {
+		c.logger.InfoContext(ctx, "kafka offset committed successfully",
+			"topic", messages[0].Topic,
+			"partition", messages[0].Partition,
+			"offset", messages[0].Offset,
+		)
+	} else {
+		// Если коммитим пачку сообщений
+		c.logger.InfoContext(ctx, "kafka offsets committed successfully", "count", len(messages))
 	}
 	return nil
 }
 
 // Закрытие kafka.reader
 func (c *Consumer) Close() error {
-	return c.reader.Close()
+	if err := c.reader.Close(); err != nil {
+		c.logger.Error("failed to close kafka reader", "error", err)
+		return fmt.Errorf("close kafka reader: %w", err)
+	}
+	c.logger.Info("kafka reader closed successfully")
+	return nil
 }
