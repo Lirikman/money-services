@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/repository"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type WalletService struct {
@@ -59,6 +61,7 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		Operation:     "deposit",
 		Amount:        amount,
 		Currency:      currency,
+		CreatedAt:     time.Now().UTC(),
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
 		log.Printf("transaction deposit - kafka send notification error: %v", prodErr)
@@ -115,6 +118,7 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		Operation:     "withdraw",
 		Amount:        amount,
 		Currency:      currency,
+		CreatedAt:     time.Now().UTC(),
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
 		log.Printf("transaction withdraw - kafka send notification error: %v", prodErr)
@@ -167,6 +171,13 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		return err
 	}
 
+	// округляем до 2 знаков в строку и конвертируем в Decimal128
+	rateStr := fmt.Sprintf("%.2f", rate)
+	mongoRate, err := primitive.ParseDecimal128(rateStr)
+	if err != nil {
+		return err
+	}
+
 	targetAmount := amount * rate
 
 	// обмениваем валюту в БД
@@ -190,7 +201,8 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		Currency:      fromCur,
 		FromCurrency:  fromCur,
 		ToCurrency:    toCur,
-		Rate:          rate,
+		Rate:          mongoRate,
+		CreatedAt:     time.Now().UTC(),
 	}
 	if prodErr := s.kafkaProducer.SendNotification(ctx, notificationEvent); prodErr != nil {
 		log.Printf("transacion exchange - kafka send notification error: %v", prodErr)

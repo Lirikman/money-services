@@ -486,8 +486,35 @@ http://127.0.0.1:8080/api/v1
 * Kafka: segmentio/kafka-go
 * Логирование: log/slog
 
+
 ### Аналитические запросы
 Поскольку события хранятся в ClickHouse, большая часть аналитики получается обычными SQL-запросами.
+
+**Количество ошибок:**
+```sql
+SELECT count()
+FROM transaction_events FINAL
+WHERE status = 'error';
+```
+**Результат:**
+count() 2 
+
+
+**Ошибки по операциям:**
+```sql
+SELECT
+    operation,
+    count() AS errors
+FROM transaction_events FINAL
+WHERE status = 'error'
+GROUP BY operation
+ORDER BY errors DESC;
+```
+**Результат:**
+deposit    10
+withdraw    8
+exchange    3
+
 
 **Количество событий по типам:**
 ```sql
@@ -502,3 +529,135 @@ ORDER BY total DESC;
 deposit     125000
 withdraw     87000
 exchange     43000
+
+
+**Количество событий по status:**
+```sql
+SELECT
+    status,
+    count() AS total
+FROM transaction_events FINAL
+GROUP BY status;
+```
+**Результат:**
+success  1240
+error    34
+retry.   67
+
+
+**Количество событий с retry:**
+```sql
+SELECT count()
+FROM transaction_events FINAL
+WHERE retry_count > 0;
+```
+**Результат:**
+count() 5
+
+
+**Общее количество retry:**
+```sql
+SELECT sum(retry_count)
+FROM transaction_events FINAL;
+```
+**Результат:**
+sum(retry_count) 5
+
+
+**Retry по операциям:**
+```sql
+SELECT
+    operation,
+    sum(retry_count) AS retries
+FROM transaction_events FINAL
+GROUP BY operation
+ORDER BY retries DESC;
+```
+**Результат:**
+deposit      14
+withdraw     23
+exchange     19
+
+
+**Средняя latency:**
+```sql
+SELECT avg(latency_ms)
+FROM transaction_events FINAL;
+```
+**Результат:**
+avg(latency_ms) 1540 
+
+
+**Агрегация по минутам**
+
+**1 минута:**
+```sql
+SELECT
+    toStartOfMinute(created_at) AS time_bucket,
+    count() AS events
+FROM transaction_events FINAL
+GROUP BY time_bucket
+ORDER BY time_bucket;
+```
+**Результат:**
+1. │ 2026-09-19 14:51:00 │      1 │
+2. │ 2026-09-19 14:52:00 │      4 │
+3. │ 2026-09-19 14:53:00 │      4 │
+4. │ 2026-09-19 14:54:00 │      3 │
+5. │ 2026-09-19 16:05:00 │      3 │
+6. │ 2026-09-19 16:06:00 │      6 │
+7. │ 2026-09-19 16:07:00 │      2 │
+
+
+**5 минут:**
+```sql
+SELECT
+    toStartOfFiveMinutes(created_at) AS time_bucket,
+    count() AS events
+FROM transaction_events FINAL
+GROUP BY time_bucket
+ORDER BY time_bucket;
+```
+**Результат:**
+1. │ 2026-09-19 14:50:00 │     12 │
+2. │ 2026-09-19 16:05:00 │     11 |
+
+
+**1 час:**
+```sql
+SELECT
+    toStartOfHour(created_at) AS time_bucket,
+    count() AS events
+FROM transaction_events FINAL
+GROUP BY time_bucket
+ORDER BY time_bucket;
+```
+**Результат:**
+1. │ 2026-09-19 14:50:00 │     12 │
+2. │ 2026-09-19 16:05:00 │     11 |
+
+
+**1 день:**
+```sql
+SELECT
+    toStartOfDay(created_at) AS time_bucket,
+    count() AS events
+FROM transaction_events FINAL
+GROUP BY time_bucket
+ORDER BY time_bucket;
+```
+**Результат:**
+1. │ 2026-09-19 00:00:00 │     23 │
+
+
+**1 неделя:**
+```sql
+SELECT
+    toStartOfWeek(created_at) AS time_bucket,
+    count() AS events
+FROM transaction_events FINAL
+GROUP BY time_bucket
+ORDER BY time_bucket;
+```
+**Результат:**
+1. │ 2026-09-19 00:00:00 │     23 │

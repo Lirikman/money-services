@@ -22,19 +22,19 @@ func NewConsumer(brokers []string, topic string, groupID string, log *slog.Logge
 			Brokers:           brokers,
 			Topic:             topic,
 			GroupID:           groupID,
+			GroupBalancers:    []kafka.GroupBalancer{&kafka.RoundRobinGroupBalancer{}},
 			MinBytes:          1,
 			MaxBytes:          10e6,
-			MaxWait:           100 * time.Millisecond,
+			MaxWait:           1 * time.Second,
 			CommitInterval:    0,
 			StartOffset:       kafka.FirstOffset,
 			RebalanceTimeout:  30 * time.Second,
 			HeartbeatInterval: 3 * time.Second,
 			Dialer: &kafka.Dialer{
-				Timeout:   10 * time.Second,
+				Timeout:   15 * time.Second,
 				DualStack: true,
+				KeepAlive: 30 * time.Second,
 			},
-			Logger:      kafka.LoggerFunc(func(msg string, args ...any) { log.Info(fmt.Sprintf("KAFKA INFO: "+msg, args...)) }),
-			ErrorLogger: kafka.LoggerFunc(func(msg string, args ...any) { log.Warn(fmt.Sprintf("KAFKA WARN: "+msg, args...)) }),
 		},
 	)
 

@@ -65,7 +65,7 @@ func (s *NotificationService) Run(ctx context.Context) error {
 	defer timer.Stop()
 
 	// Создаем канал для получения сообщений из Kafka
-	msgChan := make(chan kafkaResult)
+	msgChan := make(chan kafkaResult, s.batchSize)
 
 	// Запускаем одну фоновую горутину, которая будет только читать из Kafka
 	go func() {

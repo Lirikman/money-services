@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/Lirikman/money_services/services/gw-analytics/models"
 	"github.com/Lirikman/money_services/services/gw-analytics/service"
+	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 	kafkaGo "github.com/segmentio/kafka-go"
 )
 
@@ -31,7 +31,7 @@ func NewConsumer(brokers []string, topic string, groupID string, svc *service.An
 
 		MinBytes: 1,
 		MaxBytes: 10e6,
-		MaxWait:  100 * time.Millisecond,
+		MaxWait:  1 * time.Second,
 
 		CommitInterval:    0,
 		RebalanceTimeout:  30 * time.Second,
@@ -40,8 +40,6 @@ func NewConsumer(brokers []string, topic string, groupID string, svc *service.An
 			Timeout:   10 * time.Second,
 			DualStack: true,
 		},
-		Logger:      kafkaGo.LoggerFunc(func(msg string, args ...any) { log.Info(fmt.Sprintf("KAFKA INFO: "+msg, args...)) }),
-		ErrorLogger: kafkaGo.LoggerFunc(func(msg string, args ...any) { log.Warn(fmt.Sprintf("KAFKA WARN: "+msg, args...)) }),
 	})
 
 	return &Consumer{
@@ -57,69 +55,127 @@ const (
 )
 
 // Чтение сообщений из kafka
-func (c *Consumer) Run(ctx context.Context) error {
-	// Буфер для накопления сообщений из Kafka
-	kafkaMessages := make([]kafkaGo.Message, 0, batchSize)
-	// Буфер для распарсенных событий
-	events := make([]models.TransactionEvent, 0, batchSize)
+func (c *Consumer) readMessages(ctx context.Context, out chan<- kafkaGo.Message) error {
+	defer close(out)
 
-	ticker := time.NewTicker(flushTimeout)
-	defer ticker.Stop()
+	for {
+		msg, err := c.reader.FetchMessage(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			c.logger.Error("Fetch kafka message", slog.Any("error", err))
+			return err
+		}
+
+		select {
+		case out <- msg:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// Запуск чтения сообщений из Kafka
+func (c *Consumer) Run(ctx context.Context) error {
+	c.logger.Info("KAFKA CONSUMER STARTED")
+
+	messages := make(chan kafkaGo.Message, 1000)
+
+	go func() {
+		if err := c.readMessages(ctx, messages); err != nil {
+			c.logger.Error("kafka reader stopped", slog.Any("error", err))
+		}
+	}()
+
+	batch := make([]kafkaGo.Message, 0, batchSize)
+
+	timer := time.NewTimer(flushTimeout)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Перед выходом записываем остатки данных
-			if len(events) > 0 {
-				_ = c.flushBatch(context.Background(), events, kafkaMessages)
+			if len(batch) > 0 {
+				_ = c.processBatch(context.Background(), batch)
 			}
-			return ctx.Err()
-		case <-ticker.C:
-			// Сработал таймаут — отправляем то, что успели накопить
-			if len(events) > 0 {
-				if err := c.flushBatch(ctx, events, kafkaMessages); err != nil {
-					c.logger.Error("failed to flush batch by ticker", slog.Any("error", err))
-				}
-				// Очищаем буферы
-				events = events[:0]
-				kafkaMessages = kafkaMessages[:0]
-			}
-		default:
-			msg, err := c.reader.FetchMessage(ctx)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					return nil
-				}
-				c.logger.Error("failed to fetch message", slog.Any("error", err))
-				continue
-			}
-			// Парсим сообщение
-			event, err := c.parseMessage(msg)
-			if err != nil {
-				c.logger.Error("poison pill detected, skipping message",
-					slog.Any("error", err),
-					slog.Int64("offset", msg.Offset),
-				)
-				if commitErr := c.reader.CommitMessages(ctx, msg); commitErr != nil {
-					c.logger.Error("failed to commit poison pill", slog.Any("error", commitErr))
-				}
-				continue
-			}
-			// Добавляем в батч
-			events = append(events, event)
-			kafkaMessages = append(kafkaMessages, msg)
+			return nil
 
-			// Если батч заполнился — отправляем в ClickHouse
-			if len(events) >= batchSize {
-				if err := c.flushBatch(ctx, events, kafkaMessages); err != nil {
-					c.logger.Error("failed to flush full batch", slog.Any("error", err))
-				}
-				events = events[:0]
-				kafkaMessages = kafkaMessages[:0]
-				ticker.Reset(flushTimeout) // Сбрасываем таймер
+		case msg, ok := <-messages:
+			if !ok {
+				return nil
 			}
+			batch = append(batch, msg)
+			if len(batch) >= batchSize {
+				if err := c.processBatch(ctx, batch); err != nil {
+					return err
+				}
+				batch = batch[:0]
+				resetTimer(timer, flushTimeout)
+			}
+
+		case <-timer.C:
+			if len(batch) > 0 {
+				if err := c.processBatch(ctx, batch); err != nil {
+					return err
+				}
+				batch = batch[:0]
+			}
+			resetTimer(timer, flushTimeout)
 		}
 	}
+}
+
+// Запись батча событий в ClickHouse
+func (c *Consumer) processBatch(ctx context.Context, messages []kafkaGo.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	events := make([]models.TransactionEvent, 0, len(messages))
+	validMessages := make([]kafkaGo.Message, 0, len(messages))
+
+	for _, msg := range messages {
+		event, err := c.parseMessage(msg)
+
+		if err != nil {
+			c.logger.Error("invalid kafka message",
+				slog.Any("error", err),
+				slog.Int64("offset", msg.Offset),
+			)
+
+			// Poison pill нельзя оставлять бесконечно, поэтому commit этого сообщения.
+			if err := c.reader.CommitMessages(ctx, msg); err != nil {
+				return fmt.Errorf("commit poison message: %w", err)
+			}
+			continue
+		}
+		events = append(events, event)
+		validMessages = append(validMessages, msg)
+	}
+
+	if len(events) == 0 {
+		return nil
+	}
+
+	receivedAt := time.Now().UTC()
+
+	if err := c.service.ProcessBatch(ctx, events, receivedAt); err != nil {
+		c.logger.Error("clickhouse batch processing failed",
+			slog.Any("error", err),
+			slog.Int("batch_size", len(events)),
+		)
+
+		// ВАЖНО: offset НЕ commit. Kafka доставит сообщения снова.
+		return err
+	}
+
+	if err := c.reader.CommitMessages(ctx, validMessages...); err != nil {
+		return fmt.Errorf("commit kafka batch: %w", err)
+	}
+
+	c.logger.Info("batch processed successfully", slog.Int("batch_size", len(events)))
+	return nil
 }
 
 // Валидация и парсинг события
@@ -137,20 +193,13 @@ func (c *Consumer) parseMessage(msg kafkaGo.Message) (models.TransactionEvent, e
 	return event, nil
 }
 
-// Отправка пачки в ClickHouse и коммитит её в Kafka
-func (c *Consumer) flushBatch(ctx context.Context, events []models.TransactionEvent, messages []kafkaGo.Message) error {
-	receivedAt := time.Now().UTC()
-
-	// Пишем в ClickHouse пачку сообщений
-	if err := c.service.ProcessBatch(ctx, events, receivedAt); err != nil {
-		return err
+// Безопасный сброс таймера
+func resetTimer(timer *time.Timer, duration time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
 	}
-
-	// Коммитим пачку в Kafka
-	if err := c.reader.CommitMessages(ctx, messages...); err != nil {
-		return err
-	}
-
-	c.logger.Info("successfully processed batch", slog.Int("count", len(events)))
-	return nil
+	timer.Reset(duration)
 }

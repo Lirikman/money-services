@@ -2,12 +2,14 @@ package models
 
 import "time"
 
-type TransactionEvent struct {
-	TransactionID string    `json:"transaction_id"`
-	UserID        string    `json:"user_id"`
-	Operation     string    `json:"operation"`
-	CreatedAt     time.Time `json:"created_at"`
-	Status        string    `json:"status"`
-	RetryCount    int       `json:"retry_count"`
-	Error         string    `json:"error,omitempty"`
+type AnalyticsEvent struct {
+	TransactionID string
+	UserID        string
+	Operation     string
+	Status        string
+	CreatedAt     time.Time
+	ReceivedAt    time.Time
+	LatencyMs     uint64
+	RetryCount    uint32
+	Error         string
 }

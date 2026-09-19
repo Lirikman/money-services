@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/Lirikman/money_services/services/gw-analytics/models"
+	m "github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 )
 
 type ClickHouseRepository struct {
@@ -49,60 +50,78 @@ func NewClickHouse(addr, database, username, password string) (*ClickHouseReposi
 	return &ClickHouseRepository{conn: conn}, nil
 }
 
-// Пакетное сохранение событий
-func (r *ClickHouseRepository) SaveTransactionBatch(ctx context.Context, events []models.TransactionEvent, receivedAt time.Time) error {
-	// Инициализируем пакетную вставку
-	batch, err := r.conn.PrepareBatch(ctx, `
-		INSERT INTO analytics.transaction_events 
-		(
-			transaction_id, 
-			user_id, 
-			operation, 
-			status, 
-			created_at, 
-			received_at, 
-			latency_ms, 
-			retry_count, 
-			error, 
-			version
-		)
-	`)
-
-	if err != nil {
-		return fmt.Errorf("failed to prepare clickhouse batch: %w", err)
+// Сбор событий в батч
+func (s *ClickHouseRepository) ProcessBatch(ctx context.Context, events []m.TransactionEvent, receivedAt time.Time) error {
+	if len(events) == 0 {
+		return nil
 	}
 
-	defer func() {
-		_ = batch.Abort()
-	}()
+	analyticsEvents := make([]models.AnalyticsEvent, 0, len(events))
 
-	// Наполняем пакет данными в цикле
 	for _, event := range events {
-		// Расчет задержки доставки
-		latencySub := max(receivedAt.Sub(event.CreatedAt), 0)
-		latencyMs := int64(latencySub.Milliseconds())
+		latency := max(receivedAt.Sub(event.CreatedAt), 0)
 
-		// Добавляем строку в буфер пакета.
-		err = batch.Append(
+		analyticsEvents = append(
+			analyticsEvents,
+			models.AnalyticsEvent{
+				TransactionID: event.TransactionID,
+				UserID:        event.UserID,
+				Operation:     event.Operation,
+				Status:        event.Status,
+				CreatedAt:     event.CreatedAt,
+				ReceivedAt:    receivedAt,
+				LatencyMs:     uint64(latency.Milliseconds()),
+				RetryCount:    uint32(event.RetryCount),
+				Error:         event.Error,
+			},
+		)
+	}
+	return s.InsertEvents(ctx, analyticsEvents)
+}
+
+// Сохранение батча событий
+func (r *ClickHouseRepository) InsertEvents(ctx context.Context, events []models.AnalyticsEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	batch, err := r.conn.PrepareBatch(
+		ctx,
+		`INSERT INTO transaction_events
+		(
+			transaction_id,
+			user_id,
+			operation,
+			status,
+			created_at,
+			received_at,
+			latency_ms,
+			retry_count,
+			error
+		)`,
+	)
+	if err != nil {
+		return fmt.Errorf("prepare clickhouse batch: %w", err)
+	}
+
+	for _, event := range events {
+		if err := batch.Append(
 			event.TransactionID,
 			event.UserID,
 			event.Operation,
 			event.Status,
 			event.CreatedAt,
-			receivedAt,
-			latencyMs,
+			event.ReceivedAt,
+			event.LatencyMs,
 			event.RetryCount,
 			event.Error,
-			uint64(receivedAt.UnixNano()),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to append row to clickhouse batch: %w", err)
+		); err != nil {
+			return fmt.Errorf("append clickhouse event: %w", err)
 		}
 	}
 
-	// Отправляем всю пачку в ClickHouse
 	if err := batch.Send(); err != nil {
-		return fmt.Errorf("failed to send batch to clickhouse: %w", err)
+		return fmt.Errorf("send clickhouse batch: %w", err)
 	}
 
 	return nil

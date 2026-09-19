@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
+	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -56,11 +57,29 @@ func (m *mockWalletRepo) GetBalances(ctx context.Context, userID int64) (map[str
 	return m.balances, m.err
 }
 
+// Mock для Producer
+type mockProducer struct {
+	errToSend error
+}
+
+func (m *mockProducer) SendNotification(ctx context.Context, transfer models.Transaction) error {
+	return m.errToSend
+}
+
+func (m *mockProducer) SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error {
+	return m.errToSend
+}
+
+func (m *mockProducer) Close() error {
+	return nil
+}
+
 func TestGetRate_Success(t *testing.T) {
 	repo := &mockWalletRepo{}
 	gClient := &mockCurrencyClient{}
+	mockPr := &mockProducer{}
 
-	svc := service.NewWalletService(repo, gClient)
+	svc := service.NewWalletService(repo, gClient, mockPr)
 	rate, err := svc.GetRates(context.Background(), &pb.Empty{})
 
 	if err != nil {
@@ -74,8 +93,9 @@ func TestGetRate_Success(t *testing.T) {
 func TestGetRate_Error(t *testing.T) {
 	repo := &mockWalletRepo{}
 	gClient := &mockCurrencyClient{err: errors.New("grpc error")}
+	mockPr := &mockProducer{}
 
-	svc := service.NewWalletService(repo, gClient)
+	svc := service.NewWalletService(repo, gClient, mockPr)
 	_, err := svc.GetRates(context.Background(), &pb.Empty{})
 
 	if err == nil {
@@ -87,8 +107,9 @@ func TestGetBalances(t *testing.T) {
 	mockData := map[string]string{"USD": "1000", "RUB": "2000", "EUR": "1500"}
 	repo := &mockWalletRepo{balances: mockData}
 	gClient := &mockCurrencyClient{}
+	mockPr := &mockProducer{}
 
-	svc := service.NewWalletService(repo, gClient)
+	svc := service.NewWalletService(repo, gClient, mockPr)
 	res, err := svc.GetBalances(context.Background(), 1)
 
 	if err != nil {
@@ -177,8 +198,9 @@ func TestWalletService_Deposit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(mockWalletRepo)
 			tt.fields.mockRepoFn(mockRepo)
+			mockPr := &mockProducer{}
 
-			s := service.NewWalletService(mockRepo, &mockCurrencyClient{})
+			s := service.NewWalletService(mockRepo, &mockCurrencyClient{}, mockPr)
 
 			err := s.Deposit(context.Background(), tt.args.userID, tt.args.currency, tt.args.amount)
 
@@ -264,8 +286,9 @@ func TestWalletService_Withdraw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(mockWalletRepo)
 			tt.fields.mockRepoFn(mockRepo)
+			mockPr := &mockProducer{}
 
-			s := service.NewWalletService(mockRepo, &mockCurrencyClient{})
+			s := service.NewWalletService(mockRepo, &mockCurrencyClient{}, mockPr)
 
 			err := s.Withdraw(context.Background(), tt.args.userID, tt.args.currency, tt.args.amount)
 
@@ -381,12 +404,13 @@ func TestWalletService_Exchange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockCurrencyClient)
 			mockRepo := new(mockWalletRepo)
+			mockPr := &mockProducer{}
 
 			tt.fields.mockClientFn(mockClient)
 			tt.fields.mockRepoFn(mockRepo)
 
 			// Инициализируем сервис обеими заглушками
-			s := service.NewWalletService(mockRepo, mockClient)
+			s := service.NewWalletService(mockRepo, mockClient, mockPr)
 
 			err := s.Exchange(context.Background(), tt.args.userID, tt.args.from, tt.args.to, tt.args.amount)
 

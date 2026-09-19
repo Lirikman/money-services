@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Lirikman/money_services/services/gw-analytics/models"
 	repository "github.com/Lirikman/money_services/services/gw-analytics/repository/clickhouse"
+	m "github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 )
 
 type AnalyticsService struct {
@@ -20,9 +20,9 @@ func NewAnalyticsService(repository *repository.ClickHouseRepository) *Analytics
 }
 
 // Запуск сохранения событий
-func (s *AnalyticsService) ProcessBatch(ctx context.Context, events []models.TransactionEvent, receivedAt time.Time) error {
+func (s *AnalyticsService) ProcessBatch(ctx context.Context, events []m.TransactionEvent, receivedAt time.Time) error {
 	if len(events) == 0 {
 		return nil
 	}
-	return s.repository.SaveTransactionBatch(ctx, events, receivedAt)
+	return s.repository.ProcessBatch(ctx, events, receivedAt)
 }

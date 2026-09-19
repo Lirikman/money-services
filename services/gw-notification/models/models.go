@@ -3,6 +3,8 @@ package models
 import (
 	"errors"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const LargeTransferThreshold = 30000
@@ -28,9 +30,9 @@ type Transaction struct {
 	Amount   float64 `json:"amount" bson:"amount"`
 	Currency string  `json:"currency" bson:"currency"`
 
-	FromCurrency string  `json:"from_currency,omitempty" bson:"from_currency,omitempty"`
-	ToCurrency   string  `json:"to_currency,omitempty" bson:"to_currency,omitempty"`
-	Rate         float64 `json:"rate,omitempty" bson:"rate,omitempty"`
+	FromCurrency string               `json:"from_currency,omitempty" bson:"from_currency,omitempty"`
+	ToCurrency   string               `json:"to_currency,omitempty" bson:"to_currency,omitempty"`
+	Rate         primitive.Decimal128 `json:"rate,omitempty" bson:"rate,omitempty"`
 
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }
