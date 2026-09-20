@@ -232,19 +232,19 @@ http://127.0.0.1:8080/api/v1
 **POST**  /login 
    
 **Пример тела запроса:**
-```json 
-{  
-  "username": "petrov_20",
-  "password": "SuPer!Sec12reT00pas"
-} 
+```json
+{
+  "username": "petrov_20",
+  "password": "SuPer!Sec12reT00pas"
+}
 ```
    
 **Пример ответа:**
 ```json
 {
   "token": "JWT_TOKEN"
-} 
-```   
+}
+```
 • Успех: 200 OK  
 
 или
@@ -295,10 +295,10 @@ http://127.0.0.1:8080/api/v1
 
 **Пример тела запроса:**
 ```json
-{  
-   "amount": 100.00,  
-   "currency": "USD"  
-}  
+{
+  "amount": 100.00,
+  "currency": "USD"  
+}
 ```
 
 **Пример ответа:**
@@ -312,14 +312,14 @@ http://127.0.0.1:8080/api/v1
   }
 }
 ```
-• Успех: 200 OK 
+• Успех: 200 OK
 
 или
 
 ```json
-{  
- "error": "Invalid amount or currency"  
-}  
+{
+  "error": "Invalid amount or currency"
+}
 ```
 • Ошибка: 400 Bad Request
 
@@ -334,10 +334,11 @@ http://127.0.0.1:8080/api/v1
 
 **Пример тела запроса:**
 ```json
-{  
-   "amount": 2200.00,  
-   "currency": "RUB"  
-}  
+{
+  "amount": 2200.00,
+  "currency": "RUB"
+}
+```
 
 **Пример ответа:**
 ```json
@@ -350,13 +351,13 @@ http://127.0.0.1:8080/api/v1
   }
 }
 ```
-• Успех: 200 OK 
+• Успех: 200 OK
 
 или
 
 ```json
-{  
-  "error": "Insufficient funds or invalid amount"  
+{
+  "error": "Insufficient funds or invalid amount"
 }
 ```
 • Ошибка: 400 Bad Request
@@ -370,22 +371,22 @@ http://127.0.0.1:8080/api/v1
 
 **Пример ответа:** 
 ```json
-{  
-     "rates":   
-     {  
-       "USD": "float",  
-       "RUB": "float",  
-       "EUR": "float"  
-     }  
+{
+  "rates":
+    {
+    "USD": "float",
+    "RUB": "float",
+    "EUR": "float"
+    }
 }
-```  
-• Успех: 200 OK  
+```
+• Успех: 200 OK
 
 или
 
 ```json
-{  
-   "error": "Failed to retrieve exchange rates"
+{
+  "error": "Failed to retrieve exchange rates"
 }
 ```
 • Ошибка: 500 Internal Server Error
@@ -400,33 +401,33 @@ http://127.0.0.1:8080/api/v1
 Заголовки: *Authorization: Bearer JWT_TOKEN*
 
 **Пример тела запроса:**
-```json  
-{  
-   "from_currency": "USD",  
-   "to_currency": "EUR",  
-   "amount": 100.00  
-}  
+```json
+{
+  "from_currency": "USD",
+  "to_currency": "EUR",
+  "amount": 100.00
+}
 ```
 
 **Пример ответа:**   
 ```json
-{  
-   "message": "Exchange successful",  
-   "exchanged_amount": 85.00,  
-   "new_balance":  
-   {  
-     "USD": 0.00,  
-     "EUR": 85.00  
-   }  
+{
+  "message": "Exchange successful",
+  "exchanged_amount": 85.00,
+  "new_balance":
+    {
+    "USD": 0.00,
+    "EUR": 85.00
+    }
 }
-```  
-• Успех: 200 OK  
+```
+• Успех: 200 OK
 
 или
 
 ```json
-{  
-   "error": "Insufficient funds or invalid currencies"  
+{
+  "error": "Insufficient funds or invalid currencies"
 }
 ```
 • Ошибка: 400 Bad Request
