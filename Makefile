@@ -1,4 +1,4 @@
-.PHONY: run stop restart build
+.PHONY: run stop down build
 
 clean:
 	rm proto-exchange/generate/*
@@ -25,12 +25,13 @@ swag-init:
 	swag init -d ./ -g cmd/gw-currency-wallet/main.go --parseInternal --parseDependency
 
 run:
-	docker compose --env-file ./cmd/gw-exchanger/config.env --env-file ./cmd/gw-currency-wallet/config.env --env-file ./cmd/gw-notification/config.env --env-file ./cmd/gw-analytics/config.env up -d --build
+	docker compose up -d
 
 stop:
-	docker compose down
+	docker compose stop
 
-restart: stop run
+down:
+	docker compose down -v
 
 build:
 	docker compose build
