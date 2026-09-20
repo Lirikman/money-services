@@ -14,12 +14,12 @@ import (
 )
 
 type Handler struct {
-	svc *service.WalletService
-	usr *service.UserService
+	svc WalletService
+	usr UserService
 	log *slog.Logger
 }
 
-func NewHandler(svc *service.WalletService, usr *service.UserService, log *slog.Logger) *Handler {
+func NewHandler(svc WalletService, usr UserService, log *slog.Logger) *Handler {
 	return &Handler{svc: svc, usr: usr, log: log}
 }
 
@@ -155,12 +155,12 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		h.log.Error("userID missing or invalid type in context")
-		responseError(w, http.StatusBadRequest, "Invalid request body")
+		responseError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
 	h.log.Info("processing get balance attempt",
-		slog.Int64("username", userID),
+		slog.Int64("user_id", userID),
 	)
 
 	wall, err := h.svc.GetBalances(r.Context(), userID)
@@ -210,7 +210,7 @@ func (h *Handler) Deposit(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		h.log.Error("userID missing or invalid type in context")
-		responseError(w, http.StatusInternalServerError, "Internal server error")
+		responseError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
@@ -278,7 +278,7 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		h.log.Error("userID missing or invalid type in context")
-		responseError(w, http.StatusInternalServerError, "Internal server error")
+		responseError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
@@ -360,7 +360,7 @@ func (h *Handler) ExchangeCurrency(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		h.log.Error("userID missing or invalid type in context")
-		responseError(w, http.StatusInternalServerError, "Internal server error")
+		responseError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 

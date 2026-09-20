@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS transaction_events
     received_at    DateTime64(3, 'UTC'),
     latency_ms     UInt64,
     retry_count    UInt32,
-    error          String
+    error          String,
     version        UInt64
 )
 ENGINE = ReplacingMergeTree(version)

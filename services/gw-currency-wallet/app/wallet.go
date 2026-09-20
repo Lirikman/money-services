@@ -83,7 +83,7 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		log.Printf("transaction deposit - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
-		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction deposit - kafka send analytics successful for ID: %s", transIDStr)
 	}
@@ -140,7 +140,7 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		log.Printf("transaction withdraw - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
-		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction withdraw - kafka send analytics successful for ID: %s", transIDStr)
 	}
@@ -224,7 +224,7 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		log.Printf("transaction exchange - kafka send analytics error: %v", prodErr)
 
 		// Запускаем ретраи асинхронно в goroutine
-		go s.retrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
+		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction exchange - kafka send analytics successful for ID: %s", transIDStr)
 	}
@@ -250,7 +250,7 @@ func genTransID() (uuid.UUID, error) {
 }
 
 // обработка ретраев
-func (s *WalletService) retrySendAnalytics(ctx context.Context, event models.TransactionEvent, initialError string) {
+func (s *WalletService) RetrySendAnalytics(ctx context.Context, event models.TransactionEvent, initialError string) {
 	const maxRetries = 5
 
 	// задаём начальную паузу между попытками
