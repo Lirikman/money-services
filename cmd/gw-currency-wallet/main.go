@@ -66,7 +66,10 @@ func main() {
 	if err != nil {
 		log.Error("Failed to connect to db", slog.Any("error", err))
 	}
-	defer db.Close()
+
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// Применяем миграции
 	driver, err := postgres.WithInstance(db, &postgres.Config{
@@ -82,7 +85,16 @@ func main() {
 	if err != nil {
 		log.Error("Failed to initialize the migrator", slog.Any("err", err))
 	}
-	defer m.Close()
+
+	defer func() {
+		srcErr, dbErr := m.Close()
+		if srcErr != nil {
+			log.Error("Error closing migration source", "error", srcErr)
+		}
+		if dbErr != nil {
+			log.Error("Error closing the database connection", "error", dbErr)
+		}
+	}()
 
 	if err := m.Up(); err != nil {
 		// если схема уже актуальна

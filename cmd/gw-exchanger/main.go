@@ -60,7 +60,10 @@ func main() {
 	if err != nil {
 		log.Error("failed to connect to database", "err", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		_ = db.Close()
+	}()
 
 	if err := db.Ping(); err != nil {
 		log.Error("database ping failed", "err", err)
@@ -91,7 +94,16 @@ func main() {
 	} else {
 		log.Info("Migrations successfully applied")
 	}
-	defer m.Close()
+
+	defer func() {
+		srcErr, dbErr := m.Close()
+		if srcErr != nil {
+			log.Error("Error closing migration source", "error", srcErr)
+		}
+		if dbErr != nil {
+			log.Error("Error closing the database connection", "error", dbErr)
+		}
+	}()
 
 	// Инициализация репозитория (pеализация postgres)
 	repo := repository.NewPostgresRepository(db)

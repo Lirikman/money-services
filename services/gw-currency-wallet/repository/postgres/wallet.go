@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/models"
 )
@@ -25,7 +26,10 @@ func (r *PostgresWalletRepository) GetBalances(ctx context.Context, userID int64
 	if err != nil {
 		return nil, fmt.Errorf("failed to query balances: %w", err)
 	}
-	defer rows.Close()
+
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var wallets []models.Wallet
 	for rows.Next() {
@@ -54,7 +58,11 @@ func (r *PostgresWalletRepository) Deposit(ctx context.Context, userID int64, cu
 	if err != nil {
 		return fmt.Errorf("wallet deposit: begin tx failed: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			log.Printf("wallet deposit: rollback failed: %v", rollbackErr)
+		}
+	}()
 
 	query := `
 		INSERT INTO wallets (user_id, currency, balance) 
@@ -83,7 +91,12 @@ func (r *PostgresWalletRepository) Withdraw(ctx context.Context, userID int64, c
 	if err != nil {
 		return fmt.Errorf("wallet withdraw: begin tx failed: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			log.Printf("wallet withdraw: rollback failed: %v", rollbackErr)
+		}
+	}()
 
 	var balance float64
 	// FOR UPDATE блокирует строку для предотвращения Race Condition
@@ -118,7 +131,12 @@ func (r *PostgresWalletRepository) Exchange(ctx context.Context, userID int64, f
 	if err != nil {
 		return fmt.Errorf("wallet exchange: begin tx failed: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			log.Printf("wallet exchange: rollback failed: %v", rollbackErr)
+		}
+	}()
 
 	var fromBalance float64
 	err = tx.QueryRowContext(ctx, `SELECT balance FROM wallets WHERE user_id = $1 AND currency = $2 FOR UPDATE`, userID, from).Scan(&fromBalance)

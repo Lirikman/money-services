@@ -31,7 +31,7 @@ func NewUserService(repo repository.UserRepository, secret string) *UserService 
 var (
 	ErrEmailEmpty         = errors.New("email cannot be empty")
 	ErrEmailInvalid       = errors.New("invalid email format")
-	ErrUserAlreadyExists  = errors.New("Username or email already exists")
+	ErrUserAlreadyExists  = errors.New("username or email already exists")
 	ErrUsernameEmpty      = errors.New("username cannot be empty")
 	ErrUsernameTooShort   = errors.New("username must be at least 3 characters long")
 	ErrUsernameTooLong    = errors.New("username cannot be longer than 30 characters")

@@ -22,10 +22,10 @@ type WalletService struct {
 }
 
 var (
-	ErrInvalidAmount    = errors.New("Invalid transaction amount")
-	ErrInvalidCurrency  = errors.New("Invalid or unsupported currency")
-	ErrSameCurrency     = errors.New("Source and target currencies must be different")
-	ErrGenTransactionID = errors.New("Error generating transaction ID")
+	ErrInvalidAmount    = errors.New("invalid transaction amount")
+	ErrInvalidCurrency  = errors.New("invalid or unsupported currency")
+	ErrSameCurrency     = errors.New("source and target currencies must be different")
+	ErrGenTransactionID = errors.New("error generating transaction ID")
 	ErrKafkaSend        = errors.New("kafka send error")
 )
 

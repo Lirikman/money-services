@@ -52,7 +52,9 @@ func (r *Repository) GetRates(ctx context.Context) (map[string]float32, error) {
 		return nil, fmt.Errorf("query exchange rates failed: %w", err)
 	}
 
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var baseCurrency, targeCurrency string

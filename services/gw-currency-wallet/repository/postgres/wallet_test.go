@@ -14,7 +14,12 @@ func TestPostgresRepo_Deposit_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open a stub database connection: %s", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close db: %v", err)
+		}
+	}()
 
 	repo := repository.NewPostgresWalletRepository(db)
 
@@ -46,7 +51,12 @@ func TestPostgresRepo_Withdraw_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open a stub database connection: %s", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close db: %v", err)
+		}
+	}()
 
 	repo := repository.NewPostgresWalletRepository(db)
 
@@ -87,7 +97,12 @@ func TestPostgresRepo_Withdraw_InsufficientFunds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open a stub database connection: %s", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close db: %v", err)
+		}
+	}()
 
 	repo := repository.NewPostgresWalletRepository(db)
 
@@ -123,7 +138,10 @@ func TestPostgresRepo_ExchangeBalances_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open a stub database connection: %s", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		_ = db.Close()
+	}()
 
 	repo := repository.NewPostgresWalletRepository(db)
 
@@ -170,7 +188,10 @@ func TestPostgresRepo_ExchangeBalances_DatabaseError_Rollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open a stub database connection: %s", err)
 	}
-	defer db.Close()
+
+	defer func() {
+		_ = db.Close()
+	}()
 
 	repo := repository.NewPostgresWalletRepository(db)
 

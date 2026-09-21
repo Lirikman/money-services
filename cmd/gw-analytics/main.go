@@ -77,7 +77,16 @@ func main() {
 		slog.Error("Failed to initialize the migrator", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer m.Close()
+
+	defer func() {
+		srcErr, dbErr := m.Close()
+		if srcErr != nil {
+			log.Error("Error closing migration source", "error", srcErr)
+		}
+		if dbErr != nil {
+			log.Error("Error closing the database connection", "error", dbErr)
+		}
+	}()
 
 	if err := m.Up(); err != nil {
 		// если схема уже актуальна
