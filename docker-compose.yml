@@ -2,7 +2,7 @@ services:
   postgres-db:
     image: postgres:15-alpine
     container_name: postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: abakan2026
@@ -19,42 +19,10 @@ services:
       timeout: 5s
       retries: 5
 
-  gw-exchanger:
-    build:
-      context: .               
-      dockerfile: ./cmd/gw-exchanger/Dockerfile
-    container_name: gw-exchanger-svc
-    env_file:
-      - ./cmd/gw-exchanger/config.env
-    ports:
-      - "50051:50051"
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    networks:
-      - my-network
-  
-  gw-currency-wallet:
-    build:
-      context: .               
-      dockerfile: ./cmd/gw-currency-wallet/Dockerfile
-    container_name: gw-wallet-svc
-    env_file:
-      - ./cmd/gw-currency-wallet/config.env
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      kafka-brokers:
-        condition: service_healthy
-    networks:
-      - my-network
-
   mongo-db:
     image: mongo:7.0
     container_name: mongo
-    restart: always
+    restart: unless-stopped
     ports:
       - "27017:27017"
     environment:
@@ -70,37 +38,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-      
-  gw-notification:
-    build:
-      context: .               
-      dockerfile: ./cmd/gw-notification/Dockerfile
-    container_name: gw-notification-svc
-    env_file:
-      - ./cmd/gw-notification/config.env
-    depends_on:
-      mongo-db:
-        condition: service_healthy
-      kafka-brokers:
-        condition: service_healthy
-    networks:
-      - my-network
 
   clickhouse-db:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse-server
+    restart: unless-stopped
+    environment:
+      - CLICKHOUSE_DB=analytics
+      - CLICKHOUSE_USER=analytics
+      - CLICKHOUSE_PASSWORD=analytics_password
     ports:
       - "8123:8123" 
       - "9000:9000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-    environment:
-      - CLICKHOUSE_DB=analytics
-      - CLICKHOUSE_USER=analytics
-      - CLICKHOUSE_PASSWORD=analytics_password
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - clickhouse-logs:/var/log/clickhouse-server
@@ -108,28 +64,13 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-    restart: unless-stopped
     networks:
       - my-network
   
-  gw-analytics:
-    build:
-      context: .               
-      dockerfile: ./cmd/gw-analytics/Dockerfile
-    container_name: gw-analytics-svc
-    env_file:
-      - ./cmd/gw-analytics/config.env
-    depends_on:
-      clickhouse-db:
-        condition: service_healthy
-      kafka-brokers:
-        condition: service_healthy
-    networks:
-      - my-network
-
   kafka-brokers:
     image: apache/kafka:4.0.0
     container_name: kafka
+    restart: unless-stopped
     ports:
       - "9092:9092"
     environment:
@@ -144,15 +85,72 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_FLUSH_INTERVAL_MESSAGES: 10000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 > /dev/null 2>&1"]
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 20
+      start_period: 20s
     networks:
       - my-network
 
+  kafka-init:
+    image: apache/kafka:4.0.0
+    container_name: kafka-init
+    depends_on:
+      kafka-brokers:
+        condition: service_healthy
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -e
+
+      echo "Waiting for Kafka..."
+
+      until /opt/kafka/bin/kafka-broker-api-versions.sh \
+        --bootstrap-server kafka:29092 > /dev/null 2>&1
+      do
+        echo "Kafka is not ready yet..."
+        sleep 2
+      done
+
+      echo "Kafka is ready."
+
+      echo "Creating topic: wallet-transactions"
+
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server kafka:29092 \
+        --create \
+        --if-not-exists \
+        --topic wallet-transactions \
+        --partitions 3 \
+        --replication-factor 1
+
+      echo "Creating topic: large-transfers"
+
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server kafka:29092 \
+        --create \
+        --if-not-exists \
+        --topic large-transfers \
+        --partitions 3 \
+        --replication-factor 1
+
+      echo "Kafka topics:"
+      
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server kafka:29092 \
+        --list
+
+      echo "Kafka initialization completed."
+    networks:
+      - my-network
+  
   ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -162,7 +160,82 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     depends_on:
-      - kafka-brokers
+      kafka-brokers:
+        condition: service_healthy
+    networks:
+      - my-network
+
+  gw-exchanger:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-exchanger/Dockerfile
+    container_name: gw-exchanger-svc
+    restart: unless-stopped
+    env_file:
+      - ./cmd/gw-exchanger/config.env
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=localhost:50051"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - my-network
+
+  gw-currency-wallet:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-currency-wallet/Dockerfile
+    container_name: gw-wallet-svc
+    restart: unless-stopped
+    env_file:
+      - ./cmd/gw-currency-wallet/config.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      gw-exchanger:
+        condition: service_healthy
+    networks:
+      - my-network
+      
+  gw-notification:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-notification/Dockerfile
+    container_name: gw-notification-svc
+    restart: unless-stopped
+    env_file:
+      - ./cmd/gw-notification/config.env
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      - my-network
+  
+  gw-analytics:
+    build:
+      context: .               
+      dockerfile: ./cmd/gw-analytics/Dockerfile
+    container_name: gw-analytics-svc
+    restart: unless-stopped
+    env_file:
+      - ./cmd/gw-analytics/config.env
+    depends_on:
+      clickhouse-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     networks:
       - my-network
 
@@ -175,3 +248,4 @@ volumes:
   mongo_data:
   clickhouse-data:
   clickhouse-logs:
+  kafka-data:

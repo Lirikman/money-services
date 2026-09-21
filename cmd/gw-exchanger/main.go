@@ -25,6 +25,8 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -66,8 +68,11 @@ func main() {
 	}()
 
 	if err := db.Ping(); err != nil {
-		log.Error("database ping failed", "err", err)
+		log.Error("database ping failed", slog.Any("err", err))
+		os.Exit(1)
 	}
+
+	log.Info("PostgreSQL connection established")
 
 	// Применяем миграции
 	driver, err := postgres.WithInstance(db, &postgres.Config{
@@ -82,17 +87,7 @@ func main() {
 
 	if err != nil {
 		log.Error("Failed to initialize the migrator", "err", err)
-	}
-
-	if err := m.Up(); err != nil {
-		// если схема уже актуальна
-		if errors.Is(err, migrate.ErrNoChange) {
-			log.Info("Database is up to date, no changes")
-		} else {
-			log.Error("Error while running migration", "err", err)
-		}
-	} else {
-		log.Info("Migrations successfully applied")
+		os.Exit(1)
 	}
 
 	defer func() {
@@ -105,6 +100,18 @@ func main() {
 		}
 	}()
 
+	if err := m.Up(); err != nil {
+		// если схема уже актуальна
+		if errors.Is(err, migrate.ErrNoChange) {
+			log.Info("Database is up to date, no changes")
+		} else {
+			log.Error("Error while running migration", "err", err)
+			os.Exit(1)
+		}
+	} else {
+		log.Info("Migrations successfully applied")
+	}
+
 	// Инициализация репозитория (pеализация postgres)
 	repo := repository.NewPostgresRepository(db)
 
@@ -116,12 +123,30 @@ func main() {
 		exchangerServer,
 	)
 
-	// Запуск gRPC сервера
+	// Запуск gRPC Health Check
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(
+		grpcServer,
+		healthServer,
+	)
+	healthServer.SetServingStatus(
+		"",
+		grpc_health_v1.HealthCheckResponse_NOT_SERVING,
+	)
+
+	// Запуск listener
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		slog.Error("failed to listen", "err", err)
+		os.Exit(1)
 	}
 
+	healthServer.SetServingStatus(
+		"",
+		grpc_health_v1.HealthCheckResponse_SERVING,
+	)
+
+	// Отслеживание системных сигналов
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -135,6 +160,11 @@ func main() {
 	sig := <-sigChan
 
 	log.Info("Received signal shutting down gracefully", slog.String("sig", sig.String()))
+
+	healthServer.SetServingStatus(
+		"",
+		grpc_health_v1.HealthCheckResponse_NOT_SERVING,
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
