@@ -64,6 +64,8 @@ func (s *NotificationService) Run(ctx context.Context) error {
 	timer := time.NewTimer(s.batchTimeout)
 	defer timer.Stop()
 
+	s.logger.Info("KAFKA CONSUMER STARTED")
+
 	// Создаем канал для получения сообщений из Kafka
 	msgChan := make(chan kafkaResult, s.batchSize)
 

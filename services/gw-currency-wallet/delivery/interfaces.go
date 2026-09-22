@@ -20,7 +20,3 @@ type WalletService interface {
 	GetBalances(ctx context.Context, userID int64) (map[string]string, error)
 	RetrySendAnalytics(ctx context.Context, event models.TransactionEvent, initialError string)
 }
-
-type BalanceService interface {
-	GetBalances(ctx context.Context, userID int64) (map[string]string, error)
-}
