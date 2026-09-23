@@ -12,8 +12,8 @@ import (
 
 	_ "github.com/golang-migrate/migrate/v4/database/clickhouse"
 
-	c "github.com/Lirikman/money_services/internal/config"
-	l "github.com/Lirikman/money_services/internal/logger"
+	c "github.com/Lirikman/money_services/pkg/config"
+	l "github.com/Lirikman/money_services/pkg/logger"
 	kafkaConsumer "github.com/Lirikman/money_services/services/gw-analytics/kafka"
 	repo "github.com/Lirikman/money_services/services/gw-analytics/repository/clickhouse"
 	"github.com/Lirikman/money_services/services/gw-analytics/service"
@@ -23,8 +23,6 @@ import (
 )
 
 func main() {
-
-	// получение переменных окружения
 	configPath := flag.String("c", "config.env", "path to configuration file")
 	flag.Parse()
 
@@ -38,11 +36,9 @@ func main() {
 		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
 	}
 
-	// подключаем логгер
 	log := l.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 
-	// чтение переменных окружения
 	clickAddr := c.GetEnv("CLICKHOUSE_ADDR", "localhost:9000")
 	clickDB := c.GetEnv("CLICKHOUSE_DB", "default")
 	clickUser := c.GetEnv("CLICKHOUSE_USER", "default")
@@ -59,18 +55,15 @@ func main() {
 		slog.String("clickhouse", clickAddr),
 	)
 
-	// контекст прослушивания системных сигналов
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Создаём репозиторий
 	repo, err := repo.NewClickHouse(clickAddr, clickDB, clickUser, clickPass)
 	if err != nil {
 		log.Error("failed to create clickhouse repository", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	// Применение миграций
 	dsn := fmt.Sprintf("clickhouse://%s:%s@%s/%s?x-multi-statement=true", clickUser, clickPass, clickAddr, clickDB)
 	m, err := migrate.New(migrationPath, dsn)
 	if err != nil {
@@ -99,10 +92,8 @@ func main() {
 		log.Info("Migrations successfully applied")
 	}
 
-	// Создаём сервис аналитики
 	analyticsService := service.NewAnalyticsService(repo)
 
-	// Создаём consumer
 	consumer := kafkaConsumer.NewConsumer(
 		kafkaBrokers,
 		kafkaTopic,
@@ -113,7 +104,6 @@ func main() {
 
 	log.Info("gw-analytics started")
 
-	// Запускаем сервис
 	if err := consumer.Run(ctx); err != nil {
 		log.Error("consumer stopped", slog.Any("error", err))
 	}

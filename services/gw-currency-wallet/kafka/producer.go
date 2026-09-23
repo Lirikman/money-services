@@ -16,7 +16,6 @@ type kafkaProducer struct {
 	analyticsTopic    string
 }
 
-// Создание нового продюсера
 func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.Producer {
 	return &kafkaProducer{
 		writer: &kafkago.Writer{
@@ -32,7 +31,6 @@ func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.
 	}
 }
 
-// Отправка сообщений в kafka сервис Notification
 func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Transaction) error {
 	data, err := json.Marshal(transfer)
 
@@ -49,7 +47,6 @@ func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Tr
 	)
 }
 
-// Отправка сообщений в kafka сервис Analytics
 func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error {
 	data, err := json.Marshal(analytics)
 
@@ -66,7 +63,6 @@ func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.Tran
 	)
 }
 
-// Закрытие соединения
 func (p *kafkaProducer) Close() error {
 	return p.writer.Close()
 }

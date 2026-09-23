@@ -22,12 +22,10 @@ type UserService struct {
 	jwtSecret []byte
 }
 
-// Создание нового сервиса пользователей
 func NewUserService(repo repository.UserRepository, secret string) *UserService {
 	return &UserService{repo: repo, jwtSecret: []byte(secret)}
 }
 
-// Объявляем ошибки
 var (
 	ErrEmailEmpty         = errors.New("email cannot be empty")
 	ErrEmailInvalid       = errors.New("invalid email format")
@@ -44,10 +42,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 )
 
-// регулярные выражения для проверки username, email
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-// Регистрация нового пользователя
 func (s *UserService) Register(ctx context.Context, username, email, password string) error {
 	if err := ValidateEmail(email); err != nil {
 		return err
@@ -84,7 +80,6 @@ func (s *UserService) Register(ctx context.Context, username, email, password st
 	return s.repo.Create(ctx, user)
 }
 
-// Авторизация пользователя
 func (s *UserService) Login(ctx context.Context, username, password string) (string, error) {
 	user, err := s.repo.GetUserByUsername(ctx, username)
 	if err != nil || user == nil {
@@ -103,7 +98,6 @@ func (s *UserService) Login(ctx context.Context, username, password string) (str
 	return token.SignedString(s.jwtSecret)
 }
 
-// Валидация имени пользователя
 func ValidateUsername(username string) error {
 	if username == "" {
 		return ErrUsernameEmpty
@@ -122,7 +116,6 @@ func ValidateUsername(username string) error {
 	return nil
 }
 
-// Валидация электронной почты
 func ValidateEmail(email string) error {
 	if email == "" {
 		return ErrEmailEmpty
@@ -144,7 +137,6 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// Валидация пароля
 func ValidatePassword(password string) error {
 	if len(password) < 8 {
 		return ErrPasswordTooShort
@@ -157,7 +149,6 @@ func ValidatePassword(password string) error {
 		hasSpecial bool
 	)
 
-	// Проходим по каждому символу в пароле
 	for _, r := range password {
 		switch {
 		case unicode.IsUpper(r):
@@ -166,7 +157,6 @@ func ValidatePassword(password string) error {
 			hasLower = true
 		case unicode.IsDigit(r):
 			hasNumber = true
-		// Проверяем на спецсимволы
 		case unicode.IsPunct(r) || unicode.IsSymbol(r):
 			hasSpecial = true
 		}

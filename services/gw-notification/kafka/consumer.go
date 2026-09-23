@@ -14,8 +14,6 @@ type Consumer struct {
 	logger *slog.Logger
 }
 
-// Создание нового консьюмера
-// Ручной коммит прочитанных сообщений
 func NewConsumer(brokers []string, topic string, groupID string, log *slog.Logger) *Consumer {
 	reader := kafka.NewReader(
 		kafka.ReaderConfig{
@@ -44,7 +42,6 @@ func NewConsumer(brokers []string, topic string, groupID string, log *slog.Logge
 	}
 }
 
-// Получение сообщения из kafka
 func (c *Consumer) Fetch(ctx context.Context) (kafka.Message, error) {
 	message, err := c.reader.FetchMessage(ctx)
 	if err != nil {
@@ -54,13 +51,12 @@ func (c *Consumer) Fetch(ctx context.Context) (kafka.Message, error) {
 	return message, nil
 }
 
-// Коммит прочитанных сообщений
 func (c *Consumer) Commit(ctx context.Context, messages ...kafka.Message) error {
 	if err := c.reader.CommitMessages(ctx, messages...); err != nil {
 		c.logger.ErrorContext(ctx, "failed to commit kafka offsets", "error", err, "count", len(messages))
 		return fmt.Errorf("commit kafka offset: %w", err)
 	}
-	// если одно сообщение
+
 	if len(messages) == 1 {
 		c.logger.InfoContext(ctx, "kafka offset committed successfully",
 			"topic", messages[0].Topic,
@@ -68,13 +64,11 @@ func (c *Consumer) Commit(ctx context.Context, messages ...kafka.Message) error 
 			"offset", messages[0].Offset,
 		)
 	} else {
-		// Если коммитим пачку сообщений
 		c.logger.InfoContext(ctx, "kafka offsets committed successfully", "count", len(messages))
 	}
 	return nil
 }
 
-// Закрытие kafka.reader
 func (c *Consumer) Close() error {
 	if err := c.reader.Close(); err != nil {
 		c.logger.Error("failed to close kafka reader", "error", err)

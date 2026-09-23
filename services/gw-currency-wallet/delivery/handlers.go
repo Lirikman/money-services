@@ -470,15 +470,11 @@ func (h *Handler) GetRates(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("failed to get currency rates",
 			slog.String("err", err.Error()),
 		)
-		// Проверяем, является ли ошибка ошибкой gRPC
 		if st, ok := status.FromError(err); ok {
 			switch st.Code() {
-			// Сервер недоступен
 			case codes.Unavailable:
 				responseError(w, http.StatusServiceUnavailable, "Currency service is temporarily unavailable")
 				return
-
-			// Превышен таймаут выполнения запроса
 			case codes.DeadlineExceeded:
 				responseError(w, http.StatusGatewayTimeout, "Currency service timeout")
 				return

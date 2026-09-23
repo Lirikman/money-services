@@ -28,7 +28,6 @@ type batchMessage struct {
 	transaction models.Transaction
 }
 
-// Создание нового сервиса сохранения переводов
 func NewNotificationService(
 	consumer *kafka.Consumer,
 	repo repository.TransactionRepository,
@@ -52,7 +51,6 @@ type kafkaResult struct {
 	err error
 }
 
-// Запуск чтения сообщений из kafka
 func (s *NotificationService) Run(ctx context.Context) error {
 
 	s.logger.Info("notification service started",
@@ -66,10 +64,8 @@ func (s *NotificationService) Run(ctx context.Context) error {
 
 	s.logger.Info("KAFKA CONSUMER STARTED")
 
-	// Создаем канал для получения сообщений из Kafka
 	msgChan := make(chan kafkaResult, s.batchSize)
 
-	// Запускаем одну фоновую горутину, которая будет только читать из Kafka
 	go func() {
 		for {
 			msg, err := s.consumer.Fetch(ctx)
@@ -119,8 +115,6 @@ func (s *NotificationService) Run(ctx context.Context) error {
 					slog.Int64("offset", message.Offset),
 					slog.Any("error", err),
 				)
-				// Некорректное сообщение невозможно обработать.
-				// Commit нужен, чтобы оно не блокировало partition.
 				if err := s.consumer.Commit(ctx, message); err != nil {
 					return err
 				}
@@ -171,7 +165,6 @@ func (s *NotificationService) Run(ctx context.Context) error {
 	}
 }
 
-// Сохранение денежных переводов в БД
 func (s *NotificationService) flush(ctx context.Context, batch []batchMessage) error {
 
 	if len(batch) == 0 {
@@ -192,8 +185,6 @@ func (s *NotificationService) flush(ctx context.Context, batch []batchMessage) e
 
 	if err := s.repo.SaveBatch(ctx, transactions); err != nil {
 		logger.Error("failed to save transaction batch", slog.Any("error", err))
-		// offset НЕ commit
-		// Kafka доставит сообщения снова
 		return fmt.Errorf("save transaction batch: %w", err)
 	}
 

@@ -18,8 +18,6 @@ type MongoRepository struct {
 	collection *mongo.Collection
 }
 
-// Создание нового репозитория mongo_db
-// Подключение к БД
 func NewMongoRepository(ctx context.Context, uri string, database string, collection string) (*MongoRepository, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 
@@ -35,7 +33,6 @@ func NewMongoRepository(ctx context.Context, uri string, database string, collec
 		Database(database).
 		Collection(collection)
 
-	// создание уникального индекса
 	_, err = coll.Indexes().CreateOne(ctx,
 		mongo.IndexModel{
 			Keys:    bson.D{{Key: "transaction_id", Value: 1}},
@@ -50,7 +47,6 @@ func NewMongoRepository(ctx context.Context, uri string, database string, collec
 	return &MongoRepository{client: client, collection: coll}, nil
 }
 
-// Сохранение денежного перевода
 func (r *MongoRepository) Save(ctx context.Context, transaction models.Transaction) error {
 	_, err := r.collection.InsertOne(ctx, transaction)
 
@@ -63,7 +59,6 @@ func (r *MongoRepository) Save(ctx context.Context, transaction models.Transacti
 	return nil
 }
 
-// массовое сохранение денежных переводов
 func (r *MongoRepository) SaveBatch(ctx context.Context, transactions []models.Transaction) error {
 	if len(transactions) == 0 {
 		return nil
@@ -81,7 +76,6 @@ func (r *MongoRepository) SaveBatch(ctx context.Context, transactions []models.T
 		return nil
 	}
 
-	// Duplicate documents считаем успешно обработанными
 	var bulkErr mongo.BulkWriteException
 
 	if errors.As(err, &bulkErr) {
@@ -95,7 +89,6 @@ func (r *MongoRepository) SaveBatch(ctx context.Context, transactions []models.T
 	return fmt.Errorf("bulk insert: %w", err)
 }
 
-// Закрытие соединения mongo_db
 func (r *MongoRepository) Close(ctx context.Context) error {
 	return r.client.Disconnect(ctx)
 }

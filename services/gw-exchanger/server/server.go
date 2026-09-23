@@ -24,7 +24,6 @@ func NewExchangerServer(repo storage.Repository, log *slog.Logger) *ExchangerSer
 	}
 }
 
-// Получение списка курса обмена всех валют
 func (s *ExchangerServer) GetExchangeRates(
 	ctx context.Context, _ *pb.Empty,
 ) (*pb.ExchangeRatesResponse, error) {
@@ -43,7 +42,6 @@ func (s *ExchangerServer) GetExchangeRates(
 	}, nil
 }
 
-// Получение списка курса обмена для конкретной валюты
 func (s *ExchangerServer) GetExchangeRateForCurrency(
 	ctx context.Context,
 	req *pb.CurrencyRequest,
@@ -53,7 +51,6 @@ func (s *ExchangerServer) GetExchangeRateForCurrency(
 	from := strings.ToUpper(req.GetFromCurrency())
 	to := strings.ToUpper(req.GetToCurrency())
 
-	// Валидация поддерживаемых валют
 	if !isValidCurrency(from) || !isValidCurrency(to) {
 		s.log.Error("an unsupported currency was requested",
 			slog.String("from", from),
@@ -62,7 +59,6 @@ func (s *ExchangerServer) GetExchangeRateForCurrency(
 		return nil, status.Error(codes.InvalidArgument, "supported currencies are USD, RUB, EUR")
 	}
 
-	// Если валюты одинаковые, курс всегда 1.0
 	if from == to {
 		s.log.Debug("sale and exchange currencies are the same")
 		return &pb.ExchangeRateResponse{
@@ -72,7 +68,6 @@ func (s *ExchangerServer) GetExchangeRateForCurrency(
 		}, nil
 	}
 
-	// Получение курса из базы данных
 	rate, err := s.repo.GetRateCurrency(ctx, from, to)
 	if err != nil {
 		s.log.Error("Unable to obtain currency exchange rate",
@@ -95,7 +90,6 @@ func (s *ExchangerServer) GetExchangeRateForCurrency(
 	}, nil
 }
 
-// Валидация поддерживаемых валют
 func isValidCurrency(cur string) bool {
 	return cur == "USD" || cur == "RUB" || cur == "EUR"
 }

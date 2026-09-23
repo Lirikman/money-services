@@ -14,8 +14,6 @@ type ClickHouseRepository struct {
 	conn clickhouse.Conn
 }
 
-// Создание нового репозитория clickHouse
-// Подключение к БД
 func NewClickHouse(addr, database, username, password string) (*ClickHouseRepository, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{addr},
@@ -50,7 +48,6 @@ func NewClickHouse(addr, database, username, password string) (*ClickHouseReposi
 	return &ClickHouseRepository{conn: conn}, nil
 }
 
-// Сбор событий в батч
 func (s *ClickHouseRepository) ProcessBatch(ctx context.Context, events []m.TransactionEvent, receivedAt time.Time) error {
 	if len(events) == 0 {
 		return nil
@@ -79,7 +76,6 @@ func (s *ClickHouseRepository) ProcessBatch(ctx context.Context, events []m.Tran
 	return s.InsertEvents(ctx, analyticsEvents)
 }
 
-// Сохранение батча событий
 func (r *ClickHouseRepository) InsertEvents(ctx context.Context, events []models.AnalyticsEvent) error {
 	if len(events) == 0 {
 		return nil
@@ -127,7 +123,6 @@ func (r *ClickHouseRepository) InsertEvents(ctx context.Context, events []models
 	return nil
 }
 
-// Проверка запуска ClickHouse
 func (r *ClickHouseRepository) Ping(ctx context.Context) error {
 	return r.conn.Ping(ctx)
 }

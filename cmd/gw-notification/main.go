@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	c "github.com/Lirikman/money_services/internal/config"
-	l "github.com/Lirikman/money_services/internal/logger"
+	c "github.com/Lirikman/money_services/pkg/config"
+	l "github.com/Lirikman/money_services/pkg/logger"
 	kafkaclient "github.com/Lirikman/money_services/services/gw-notification/kafka"
 	repository "github.com/Lirikman/money_services/services/gw-notification/repository/mongo"
 	"github.com/Lirikman/money_services/services/gw-notification/service"
@@ -19,7 +19,6 @@ import (
 )
 
 func main() {
-	// получение переменных окружения
 	configPath := flag.String("c", "config.env", "path to configuration file")
 	flag.Parse()
 
@@ -33,12 +32,10 @@ func main() {
 		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
 	}
 
-	// подклчаем логгер
 	log := l.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 	log.Info("Starting gw-notification", slog.String("service", "gw-notification"))
 
-	// чтение переменных окружения
 	dbURI := c.GetEnv("MONGO_URI", "mongodb://root:secret@localhost:27017/mydb?authSource=admin")
 	dbName := c.GetEnv("MONGO_DATABASE", "notification")
 	dbCollect := c.GetEnv("MONGO_COLLECTION", "transactions")
@@ -48,11 +45,9 @@ func main() {
 	batchSize := c.GetEnvInt("BATCH_SIZE", 500)
 	batchTimeout := c.GetEnvDuration("BATCH_TIMEOUT", 500*time.Millisecond)
 
-	// контекст прослышивания системных сигналов
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// создаём репозиторий
 	repo, err := repository.NewMongoRepository(ctx, dbURI, dbName, dbCollect)
 
 	if err != nil {
@@ -60,13 +55,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Создаём консьюмера
 	consumer := kafkaclient.NewConsumer(kafkaBrokers, kafkaTopic, kafkaGroupID, log)
 
-	// Создаём сервис сохранения денежных переводов
 	svc := service.NewNotificationService(consumer, repo, log, batchSize, batchTimeout)
 
-	// Запускаем сервис
 	err = svc.Run(ctx)
 
 	if err != nil && !errors.Is(err, context.Canceled) {

@@ -29,12 +29,10 @@ var (
 	ErrKafkaSend        = errors.New("kafka send error")
 )
 
-// Создание нового сервиса кошелька
 func NewWalletService(repo repository.WalletRepository, grpcClient repository.CurrencyClient, producer repository.Producer) *WalletService {
 	return &WalletService{repo: repo, grpcClient: grpcClient, kafkaProducer: producer}
 }
 
-// Пополнение кошелька
 func (s *WalletService) Deposit(ctx context.Context, userID int64, currency string, amount float64) error {
 	if amount <= 0 {
 		return ErrInvalidAmount
@@ -42,11 +40,9 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 	if !isSupportedCurrency(currency) {
 		return ErrInvalidCurrency
 	}
-	// зачисляем деньги в БД
 	if err := s.repo.Deposit(ctx, userID, currency, amount); err != nil {
 		return err
 	}
-	// отправляем сообщения в kafka
 	transID, err := genTransID()
 	if err != nil {
 		return err
@@ -54,7 +50,6 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 	transIDStr := transID.String()
 	userIDStr := strconv.FormatInt(userID, 10)
 
-	// сообщение для сервиса Notification
 	notificationEvent := models.Transaction{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -69,7 +64,6 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 		log.Printf("transaction deposit - kafka send notification successful for ID: %s", transIDStr)
 	}
 
-	// сообщение для сервиса Analytics
 	analyticsEvent := models.TransactionEvent{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -82,7 +76,6 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
 		log.Printf("transaction deposit - kafka send analytics error: %v", prodErr)
 
-		// Запускаем ретраи асинхронно в goroutine
 		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction deposit - kafka send analytics successful for ID: %s", transIDStr)
@@ -91,7 +84,6 @@ func (s *WalletService) Deposit(ctx context.Context, userID int64, currency stri
 	return nil
 }
 
-// Вывод средств с кошелька
 func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency string, amount float64) error {
 	if amount <= 0 {
 		return ErrInvalidAmount
@@ -99,11 +91,9 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 	if !isSupportedCurrency(currency) {
 		return ErrInvalidCurrency
 	}
-	// списываем деньги в БД
 	if err := s.repo.Withdraw(ctx, userID, currency, amount); err != nil {
 		return err
 	}
-	// отправляем сообщение в kafka
 	transID, err := genTransID()
 	if err != nil {
 		return err
@@ -111,7 +101,6 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 	transIDStr := transID.String()
 	userIDStr := strconv.FormatInt(userID, 10)
 
-	// сообщение для сервиса Notification
 	notificationEvent := models.Transaction{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -126,7 +115,6 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 		log.Printf("transaction withdraw - kafka send notification successful for ID: %s", transIDStr)
 	}
 
-	// сообщение для сервиса Analytics
 	analyticsEvent := models.TransactionEvent{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -138,8 +126,6 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 	}
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
 		log.Printf("transaction withdraw - kafka send analytics error: %v", prodErr)
-
-		// Запускаем ретраи асинхронно в goroutine
 		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction withdraw - kafka send analytics successful for ID: %s", transIDStr)
@@ -148,12 +134,10 @@ func (s *WalletService) Withdraw(ctx context.Context, userID int64, currency str
 	return nil
 }
 
-// Получение курсов обмена валют
 func (s *WalletService) GetRates(ctx context.Context, req *pb.Empty) (*pb.ExchangeRatesResponse, error) {
 	return s.grpcClient.GetRates(ctx, req)
 }
 
-// Обмен валюты
 func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toCur string, amount float64) error {
 	if amount <= 0 {
 		return ErrInvalidAmount
@@ -171,7 +155,6 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		return err
 	}
 
-	// округляем до 2 знаков в строку и конвертируем в Decimal128
 	rateStr := fmt.Sprintf("%.2f", rate)
 	mongoRate, err := primitive.ParseDecimal128(rateStr)
 	if err != nil {
@@ -180,11 +163,10 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 
 	targetAmount := amount * rate
 
-	// обмениваем валюту в БД
 	if err := s.repo.Exchange(ctx, userID, fromCur, toCur, amount, targetAmount); err != nil {
 		return err
 	}
-	// отпрвляем сообщение в kafka
+
 	transID, err := genTransID()
 	if err != nil {
 		return err
@@ -192,7 +174,6 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 	transIDStr := transID.String()
 	userIDStr := strconv.FormatInt(userID, 10)
 
-	// сообщение для сервиса Notification
 	notificationEvent := models.Transaction{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -210,7 +191,6 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 		log.Printf("transaction exchange - kafka send notification successful for ID: %s", transIDStr)
 	}
 
-	// сообщение для сервиса Analytics
 	analyticsEvent := models.TransactionEvent{
 		TransactionID: transIDStr,
 		UserID:        userIDStr,
@@ -222,8 +202,6 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 	}
 	if prodErr := s.kafkaProducer.SendAnalytics(ctx, analyticsEvent); prodErr != nil {
 		log.Printf("transaction exchange - kafka send analytics error: %v", prodErr)
-
-		// Запускаем ретраи асинхронно в goroutine
 		go s.RetrySendAnalytics(context.Background(), analyticsEvent, prodErr.Error())
 	} else {
 		log.Printf("transaction exchange - kafka send analytics successful for ID: %s", transIDStr)
@@ -232,7 +210,6 @@ func (s *WalletService) Exchange(ctx context.Context, userID int64, fromCur, toC
 	return nil
 }
 
-// Получение баланса пользователя
 func (s *WalletService) GetBalances(ctx context.Context, userID int64) (map[string]string, error) {
 	return s.repo.GetBalances(ctx, userID)
 }
@@ -249,11 +226,9 @@ func genTransID() (uuid.UUID, error) {
 	return transID, nil
 }
 
-// обработка ретраев
 func (s *WalletService) RetrySendAnalytics(ctx context.Context, event models.TransactionEvent, initialError string) {
 	const maxRetries = 5
 
-	// задаём начальную паузу между попытками
 	backoff := 1 * time.Second
 
 	event.Status = "error"
@@ -277,11 +252,10 @@ func (s *WalletService) RetrySendAnalytics(ctx context.Context, event models.Tra
 			return
 		} else {
 			event.Error = err.Error()
-			backoff *= 2 // Увеличиваем паузу в 2 раза
+			backoff *= 2
 		}
 	}
 
-	// / если все попытки исчерпаны
 	log.Printf("CRITICAL: failed to send analytics for tx %s after %d attempts. Last error: %s",
 		event.TransactionID, maxRetries, event.Error)
 }

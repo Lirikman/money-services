@@ -14,14 +14,14 @@ func TestTransaction_Validate(t *testing.T) {
 		TransactionID: "tx-123",
 		UserID:        "user-789",
 		Operation:     OperationDeposit,
-		Amount:        35000.0, // Выше порога 30000
+		Amount:        35000.0,
 		Currency:      "USD",
 		CreatedAt:     time.Now(),
 	}
 
 	tests := []struct {
 		name    string
-		modify  func(tx Transaction) Transaction // Функция для точечного изменения базовой транзакции
+		modify  func(tx Transaction) Transaction
 		wantErr error
 	}{
 		{
@@ -58,7 +58,7 @@ func TestTransaction_Validate(t *testing.T) {
 		{
 			name: "Amount exactly at threshold",
 			modify: func(tx Transaction) Transaction {
-				tx.Amount = 30000.0 // Граничное значение
+				tx.Amount = 30000.0
 				return tx
 			},
 			wantErr: nil,
@@ -85,7 +85,6 @@ func TestTransaction_Validate(t *testing.T) {
 				tx.Operation = OperationExchange
 				tx.FromCurrency = "USD"
 				tx.ToCurrency = "EUR"
-				// Пример создания Decimal128 для ставки
 				d128, _ := primitive.ParseDecimal128("0.92")
 				tx.Rate = d128
 				return tx
@@ -96,7 +95,6 @@ func TestTransaction_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Берём чистый валидный объект и модифицируем его под конкретный кейс
 			tx := tt.modify(validTx)
 			err := tx.Validate()
 

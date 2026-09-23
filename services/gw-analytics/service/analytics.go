@@ -12,14 +12,12 @@ type AnalyticsService struct {
 	repository *repository.ClickHouseRepository
 }
 
-// Создание сервиса аналитики
 func NewAnalyticsService(repository *repository.ClickHouseRepository) *AnalyticsService {
 	return &AnalyticsService{
 		repository: repository,
 	}
 }
 
-// Запуск сохранения событий
 func (s *AnalyticsService) ProcessBatch(ctx context.Context, events []m.TransactionEvent, receivedAt time.Time) error {
 	if len(events) == 0 {
 		return nil

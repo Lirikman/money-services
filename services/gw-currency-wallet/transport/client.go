@@ -17,19 +17,13 @@ type CurrencyRateCache struct {
 }
 
 type CurrencyClient struct {
-	client pb.ExchangeServiceClient
-	log    *slog.Logger
-
-	// Конфигурация кэша
-	cacheTTL time.Duration
-	mu       sync.RWMutex
-
-	// Кэш для метода GetRates
+	client         pb.ExchangeServiceClient
+	log            *slog.Logger
+	cacheTTL       time.Duration
+	mu             sync.RWMutex
 	ratesCache     *pb.ExchangeRatesResponse
 	ratesCacheTime time.Time
-
-	// Кэш для метода GetRateCurrency
-	currencyCache map[string]CurrencyRateCache
+	currencyCache  map[string]CurrencyRateCache
 }
 
 func NewCurrencyClient(addr string, log *slog.Logger, cacheTTL time.Duration) (*CurrencyClient, error) {
@@ -50,7 +44,6 @@ func NewCurrencyClient(addr string, log *slog.Logger, cacheTTL time.Duration) (*
 }
 
 func (c *CurrencyClient) GetRates(ctx context.Context, req *pb.Empty) (*pb.ExchangeRatesResponse, error) {
-	// Проверка актуальности кэша под RLock
 	c.mu.RLock()
 	hasCache := c.ratesCache != nil
 	isCacheValid := time.Since(c.ratesCacheTime) < c.cacheTTL
@@ -62,12 +55,10 @@ func (c *CurrencyClient) GetRates(ctx context.Context, req *pb.Empty) (*pb.Excha
 	}
 	c.mu.RUnlock()
 
-	// Запрос к серверу
 	c.log.Debug("sending grpc request to get exchange rates")
 	resp, err := c.client.GetExchangeRates(ctx, req)
 	if err != nil {
 		c.log.Error("failed to get exchange rates via grpc", slog.Any("error", err))
-		// Fallback: возврат устаревших данных при ошибке
 		c.mu.RLock()
 		if c.ratesCache != nil {
 			c.log.Warn("grpc failed, returning stale rates cache as fallback")
@@ -79,7 +70,6 @@ func (c *CurrencyClient) GetRates(ctx context.Context, req *pb.Empty) (*pb.Excha
 		return nil, err
 	}
 
-	// Обновление кэша под Lock
 	c.mu.Lock()
 	c.ratesCache = resp
 	c.ratesCacheTime = time.Now()
@@ -92,7 +82,6 @@ func (c *CurrencyClient) GetRates(ctx context.Context, req *pb.Empty) (*pb.Excha
 func (c *CurrencyClient) GetRateCurrency(ctx context.Context, from, to string) (float64, error) {
 	cacheKey := from + "/" + to
 
-	// Проверка актуальности кэша в map под RLock
 	c.mu.RLock()
 	cachedData, exists := c.currencyCache[cacheKey]
 	isCacheValid := time.Since(cachedData.UpdatedAt) < c.cacheTTL
@@ -104,7 +93,6 @@ func (c *CurrencyClient) GetRateCurrency(ctx context.Context, from, to string) (
 	}
 	c.mu.RUnlock()
 
-	// Запрос к серверу
 	c.log.Debug("sending grpc request for specific currency rate")
 	resp, err := c.client.GetExchangeRateForCurrency(ctx, &pb.CurrencyRequest{
 		FromCurrency: from,
@@ -116,7 +104,7 @@ func (c *CurrencyClient) GetRateCurrency(ctx context.Context, from, to string) (
 			slog.String("to", to),
 			slog.Any("error", err),
 		)
-		// Fallback: возврат устаревшего одиночного курса при ошибке
+
 		c.mu.RLock()
 		if exists {
 			c.log.Warn("grpc failed, returning stale currency cache as fallback", slog.String("pair", cacheKey))
@@ -131,7 +119,6 @@ func (c *CurrencyClient) GetRateCurrency(ctx context.Context, from, to string) (
 
 	actualRate := float64(resp.Rate)
 
-	// Обновление карты под Lock
 	c.mu.Lock()
 	c.currencyCache[cacheKey] = CurrencyRateCache{
 		Rate:      actualRate,

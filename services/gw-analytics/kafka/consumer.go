@@ -54,7 +54,6 @@ const (
 	flushTimeout = 3 * time.Second
 )
 
-// Чтение сообщений из kafka
 func (c *Consumer) readMessages(ctx context.Context, out chan<- kafkaGo.Message) error {
 	defer close(out)
 
@@ -76,7 +75,6 @@ func (c *Consumer) readMessages(ctx context.Context, out chan<- kafkaGo.Message)
 	}
 }
 
-// Запуск чтения сообщений из Kafka
 func (c *Consumer) Run(ctx context.Context) error {
 	c.logger.Info("KAFKA CONSUMER STARTED")
 
@@ -126,7 +124,6 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
-// Запись батча событий в ClickHouse
 func (c *Consumer) processBatch(ctx context.Context, messages []kafkaGo.Message) error {
 	if len(messages) == 0 {
 		return nil
@@ -143,8 +140,6 @@ func (c *Consumer) processBatch(ctx context.Context, messages []kafkaGo.Message)
 				slog.Any("error", err),
 				slog.Int64("offset", msg.Offset),
 			)
-
-			// Poison pill нельзя оставлять бесконечно, поэтому commit этого сообщения.
 			if err := c.reader.CommitMessages(ctx, msg); err != nil {
 				return fmt.Errorf("commit poison message: %w", err)
 			}
@@ -165,8 +160,6 @@ func (c *Consumer) processBatch(ctx context.Context, messages []kafkaGo.Message)
 			slog.Any("error", err),
 			slog.Int("batch_size", len(events)),
 		)
-
-		// ВАЖНО: offset НЕ commit. Kafka доставит сообщения снова.
 		return err
 	}
 
@@ -178,7 +171,6 @@ func (c *Consumer) processBatch(ctx context.Context, messages []kafkaGo.Message)
 	return nil
 }
 
-// Валидация и парсинг события
 func (c *Consumer) parseMessage(msg kafkaGo.Message) (models.TransactionEvent, error) {
 	var event models.TransactionEvent
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
@@ -193,7 +185,6 @@ func (c *Consumer) parseMessage(msg kafkaGo.Message) (models.TransactionEvent, e
 	return event, nil
 }
 
-// Безопасный сброс таймера
 func resetTimer(timer *time.Timer, duration time.Duration) {
 	if !timer.Stop() {
 		select {

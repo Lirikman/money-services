@@ -52,7 +52,6 @@ func (r *PostgresWalletRepository) GetBalances(ctx context.Context, userID int64
 	return balances, nil
 }
 
-// Пополнение баланса
 func (r *PostgresWalletRepository) Deposit(ctx context.Context, userID int64, currency string, amount float64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -85,7 +84,6 @@ func (r *PostgresWalletRepository) Deposit(ctx context.Context, userID int64, cu
 var ErrWalletNotFound = errors.New("wallet not found")
 var ErrInsufficientFunds = errors.New("insufficient funds")
 
-// Списание баланса
 func (r *PostgresWalletRepository) Withdraw(ctx context.Context, userID int64, currency string, amount float64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -99,7 +97,6 @@ func (r *PostgresWalletRepository) Withdraw(ctx context.Context, userID int64, c
 	}()
 
 	var balance float64
-	// FOR UPDATE блокирует строку для предотвращения Race Condition
 	query := `SELECT balance FROM wallets WHERE user_id = $1 AND currency = $2 FOR UPDATE`
 	err = tx.QueryRowContext(ctx, query, userID, currency).Scan(&balance)
 	if err != nil {
@@ -125,7 +122,6 @@ func (r *PostgresWalletRepository) Withdraw(ctx context.Context, userID int64, c
 	return nil
 }
 
-// Обмен валют
 func (r *PostgresWalletRepository) Exchange(ctx context.Context, userID int64, from, to string, amount, targetAmount float64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -148,13 +144,11 @@ func (r *PostgresWalletRepository) Exchange(ctx context.Context, userID int64, f
 		return ErrInsufficientFunds
 	}
 
-	// Списание
 	_, err = tx.ExecContext(ctx, `UPDATE wallets SET balance = balance - $1 WHERE user_id = $2 AND currency = $3`, amount, userID, from)
 	if err != nil {
 		return fmt.Errorf("wallet exchange: currency debit failed: %w", err)
 	}
 
-	// Зачисление целевой валюты
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO wallets (user_id, currency, balance) 
 		VALUES ($1, $2, $3) 

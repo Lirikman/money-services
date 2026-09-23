@@ -15,8 +15,8 @@ import (
 
 	_ "github.com/lib/pq"
 
-	c "github.com/Lirikman/money_services/internal/config"
-	"github.com/Lirikman/money_services/internal/logger"
+	c "github.com/Lirikman/money_services/pkg/config"
+	"github.com/Lirikman/money_services/pkg/logger"
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
 	"github.com/Lirikman/money_services/services/gw-exchanger/server"
 	"github.com/Lirikman/money_services/services/gw-exchanger/storage/repository"
@@ -30,7 +30,6 @@ import (
 )
 
 func main() {
-	// получение переменных окружения
 	configPath := flag.String("c", "config.env", "path to configuration file")
 	flag.Parse()
 
@@ -49,7 +48,6 @@ func main() {
 	log.Info("Starting service Exchanger")
 	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 
-	// Подключение к PostgresQL
 	host := c.GetEnv("DB_HOST", "localhost")
 	port := c.GetEnv("DB_PORT", "5432")
 	user := c.GetEnv("DB_USER", "postgres")
@@ -74,7 +72,6 @@ func main() {
 
 	log.Info("PostgreSQL connection established")
 
-	// Применяем миграции
 	driver, err := postgres.WithInstance(db, &postgres.Config{
 		MigrationsTable: "exchanger",
 	})
@@ -101,7 +98,6 @@ func main() {
 	}()
 
 	if err := m.Up(); err != nil {
-		// если схема уже актуальна
 		if errors.Is(err, migrate.ErrNoChange) {
 			log.Info("Database is up to date, no changes")
 		} else {
@@ -112,10 +108,8 @@ func main() {
 		log.Info("Migrations successfully applied")
 	}
 
-	// Инициализация репозитория (pеализация postgres)
 	repo := repository.NewPostgresRepository(db)
 
-	// Создание gRPC сервера
 	grpcServer := grpc.NewServer()
 	exchangerServer := server.NewExchangerServer(repo, log)
 	pb.RegisterExchangeServiceServer(
@@ -123,7 +117,6 @@ func main() {
 		exchangerServer,
 	)
 
-	// Запуск gRPC Health Check
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(
 		grpcServer,
@@ -134,7 +127,6 @@ func main() {
 		grpc_health_v1.HealthCheckResponse_NOT_SERVING,
 	)
 
-	// Запуск listener
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		slog.Error("failed to listen", "err", err)
@@ -146,7 +138,6 @@ func main() {
 		grpc_health_v1.HealthCheckResponse_SERVING,
 	)
 
-	// Отслеживание системных сигналов
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
