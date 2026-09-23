@@ -8,7 +8,7 @@
   * **gw-notification** - сохраняет крупные денежные переводы
   * **gw-analytics** - для аналитики денежных операций
 
-Сервисы gw-currency-wallet и gw-exchanger общаются по ппотоколу gRPC.
+Сервисы gw-currency-wallet и gw-exchanger общаются по протоколу gRPC.
 
 Сервис gw-currency-wallet отправляет данные о транзакциях в брокер сообщений Kafka.
 
