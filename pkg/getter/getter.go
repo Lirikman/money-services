@@ -1,4 +1,4 @@
-package config
+package getter
 
 import (
 	"log/slog"

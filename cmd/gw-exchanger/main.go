@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,47 +14,25 @@ import (
 
 	_ "github.com/lib/pq"
 
-	c "github.com/Lirikman/money_services/pkg/config"
-	"github.com/Lirikman/money_services/pkg/logger"
 	pb "github.com/Lirikman/money_services/proto-exchange/generate"
+	"github.com/Lirikman/money_services/services/gw-exchanger/config"
 	"github.com/Lirikman/money_services/services/gw-exchanger/server"
 	"github.com/Lirikman/money_services/services/gw-exchanger/storage/repository"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
-	configPath := flag.String("c", "config.env", "path to configuration file")
-	flag.Parse()
-
-	if _, err := os.Stat(*configPath); err == nil {
-		slog.Info("Loading environment variables from file", slog.String("file", *configPath))
-		if err := godotenv.Load(*configPath); err != nil {
-			slog.Error("Error loading configuration file", slog.Any("error", err))
-			os.Exit(1)
-		}
-	} else {
-		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
-	}
-
-	log := logger.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
+	cfg, log := config.LoadExchangerConfig()
+	slog.SetDefault(log)
 
 	log.Info("Starting service Exchanger")
-	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 
-	host := c.GetEnv("DB_HOST", "localhost")
-	port := c.GetEnv("DB_PORT", "5432")
-	user := c.GetEnv("DB_USER", "postgres")
-	pass := c.GetEnv("DB_PASSWORD", "secret")
-	name := c.GetEnv("DB_NAME", "postgres")
-	migratePath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
-
-	conn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, pass, name)
+	conn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.NameDB)
 	db, err := sql.Open("postgres", conn)
 	if err != nil {
 		log.Error("failed to connect to database", "err", err)
@@ -80,7 +57,7 @@ func main() {
 		log.Error("Failed to create migration driver", "err", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(migratePath, "postgres", driver)
+	m, err := migrate.NewWithDatabaseInstance(cfg.MigratePath, "postgres", driver)
 
 	if err != nil {
 		log.Error("Failed to initialize the migrator", "err", err)

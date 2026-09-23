@@ -3,18 +3,15 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"flag"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/rs/cors"
 
 	_ "github.com/Lirikman/money_services/docs"
-	c "github.com/Lirikman/money_services/pkg/config"
-	logger "github.com/Lirikman/money_services/pkg/logger"
 	service "github.com/Lirikman/money_services/services/gw-currency-wallet/app"
+	"github.com/Lirikman/money_services/services/gw-currency-wallet/config"
 	delivery "github.com/Lirikman/money_services/services/gw-currency-wallet/delivery"
 	"github.com/Lirikman/money_services/services/gw-currency-wallet/kafka"
 	repository "github.com/Lirikman/money_services/services/gw-currency-wallet/repository/postgres"
@@ -22,7 +19,6 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -33,32 +29,12 @@ import (
 // @BasePath        /api/v1
 // @schemes   	    http https
 func main() {
-	configPath := flag.String("c", "config.env", "path to configuration file")
-	flag.Parse()
+	cfg, log := config.LoadWalletConfig()
+	slog.SetDefault(log)
 
-	if _, err := os.Stat(*configPath); err == nil {
-		slog.Info("Loading environment variables from file", slog.String("file", *configPath))
-		if err := godotenv.Load(*configPath); err != nil {
-			slog.Error("Error loading configuration file", slog.Any("error", err))
-			os.Exit(1)
-		}
-	} else {
-		slog.Warn("Configuration file not found, using system environment variables", slog.String("file", *configPath))
-	}
-
-	log := logger.NewLogger(c.GetEnv("LOG_LEVEL", "INFO"))
-	log.Debug("Config file flag parsed", slog.String("path", *configPath))
 	log.Info("Starting service Currency-wallet")
 
-	dbURL := c.GetEnv("DB_URL", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
-	grpcAddr := c.GetEnv("EXCHANGE_GRPC_ADDR", "localhost:50051")
-	jwtSecret := c.GetEnv("JWT_SECRET", "super_puper_secret_key")
-	migratePath := c.GetEnv("DB_MIGRATIONS", "file://migrations")
-	notificationTopic := c.GetEnv("KAFKA_NOTIFICATION_TOPIC", "large-transfers")
-	analyticsTopic := c.GetEnv("KAFKA_ANALYTICS_TOPIC", "wallet-transactions")
-	kafkaBrokers := []string{c.GetEnv("KAFKA_BROKERS", "localhost:9092")}
-
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("postgres", cfg.UrlDB)
 	if err != nil {
 		log.Error("Failed to connect to db", slog.Any("error", err))
 	}
@@ -74,7 +50,7 @@ func main() {
 		log.Error("Failed to create migration driver", "err", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(migratePath, "postgres", driver)
+	m, err := migrate.NewWithDatabaseInstance(cfg.MigratePath, "postgres", driver)
 	if err != nil {
 		log.Error("Failed to initialize the migrator", slog.Any("err", err))
 	}
@@ -100,16 +76,16 @@ func main() {
 	}
 
 	cacheTTL := 5 * time.Minute
-	grpcClient, err := transport.NewCurrencyClient(grpcAddr, log, cacheTTL)
+	grpcClient, err := transport.NewCurrencyClient(cfg.AddrGrpc, log, cacheTTL)
 	if err != nil {
 		log.Error("Failed to connect to gRPC server", slog.Any("error", err))
 	}
 
 	repoWall := repository.NewPostgresWalletRepository(db)
 	repoUsr := repository.NewPostgresUserRepository(db)
-	writer := kafka.NewProducer(kafkaBrokers, notificationTopic, analyticsTopic)
+	writer := kafka.NewProducer(cfg.KafkaBrokers, cfg.NotificationTopic, cfg.AnalyticsTopic)
 	svc := service.NewWalletService(repoWall, grpcClient, writer)
-	usr := service.NewUserService(repoUsr, jwtSecret)
+	usr := service.NewUserService(repoUsr, cfg.SecretJWT)
 	h := delivery.NewHandler(svc, usr, log)
 
 	mux := http.NewServeMux()
@@ -117,7 +93,7 @@ func main() {
 	mux.HandleFunc("POST /api/v1/register", h.Register)
 	mux.HandleFunc("POST /api/v1/login", h.Login)
 
-	authHandler := delivery.AuthMiddleware(jwtSecret)
+	authHandler := delivery.AuthMiddleware(cfg.SecretJWT)
 
 	mux.Handle("GET /api/v1/balance", authHandler(http.HandlerFunc(h.Balance)))
 	mux.Handle("POST /api/v1/wallet/deposit", authHandler(http.HandlerFunc(h.Deposit)))
