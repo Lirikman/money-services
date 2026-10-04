@@ -13,7 +13,7 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOARCH=amd64
 
-RUN go build -o currency-wallet-bin ./cmd/gw-currency-wallet/main.go
+RUN go build -o currency-wallet-bin ./cmd/gw-currency-wallet
 
 # Stage 2: Runtime image
 FROM alpine:latest

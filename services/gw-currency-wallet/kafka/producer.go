@@ -10,14 +10,14 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 )
 
-type kafkaProducer struct {
+type KafkaProducer struct {
 	writer            *kafkago.Writer
 	notificationTopic string
 	analyticsTopic    string
 }
 
 func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.Producer {
-	return &kafkaProducer{
+	return &KafkaProducer{
 		writer: &kafkago.Writer{
 			Addr:         kafkago.TCP(brokers...),
 			BatchSize:    100,
@@ -31,7 +31,7 @@ func NewProducer(brokers []string, notificationTopic, analyticsTopic string) pr.
 	}
 }
 
-func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Transaction) error {
+func (p *KafkaProducer) SendNotification(ctx context.Context, transfer models.Transaction) error {
 	data, err := json.Marshal(transfer)
 
 	if err != nil {
@@ -47,7 +47,7 @@ func (p *kafkaProducer) SendNotification(ctx context.Context, transfer models.Tr
 	)
 }
 
-func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error {
+func (p *KafkaProducer) SendAnalytics(ctx context.Context, analytics models.TransactionEvent) error {
 	data, err := json.Marshal(analytics)
 
 	if err != nil {
@@ -63,6 +63,6 @@ func (p *kafkaProducer) SendAnalytics(ctx context.Context, analytics models.Tran
 	)
 }
 
-func (p *kafkaProducer) Close() error {
+func (p *KafkaProducer) Close() error {
 	return p.writer.Close()
 }
