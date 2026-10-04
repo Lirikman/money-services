@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/rs/cors"
@@ -34,14 +37,21 @@ func main() {
 
 	log.Info("Starting service Currency-wallet")
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	db, err := sql.Open("postgres", cfg.UrlDB)
 	if err != nil {
 		log.Error("Failed to connect to db", slog.Any("error", err))
 	}
 
-	defer func() {
+	if err := db.Ping(); err != nil {
+		log.Error("Failed to ping database", slog.Any("error", err))
 		_ = db.Close()
-	}()
+		return
+	}
+
+	log.Info("Database connection established")
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{
 		MigrationsTable: "currency_wallet",
@@ -111,8 +121,56 @@ func main() {
 	})
 	handlerWithCORS := c.Handler(mux)
 
-	log.Info("Server is running on port", slog.String("port", "8080"))
-	if err := http.ListenAndServe(":8080", handlerWithCORS); err != nil {
-		log.Error("Server stopped", slog.Any("err", err))
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           handlerWithCORS,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+
+	go func() {
+		log.Info(
+			"Server is running",
+			slog.String("port", "8080"),
+		)
+
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("HTTP server failed", slog.Any("error", err))
+		}
+	}()
+
+	<-ctx.Done()
+
+	log.Info("Shutdown signal received")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error("HTTP server forced to shutdown", slog.Any("error", err))
+	} else {
+		log.Info("HTTP server stopped gracefully")
+	}
+
+	if err := writer.Close(); err != nil {
+		log.Error("Failed to close Kafka producer", slog.Any("error", err))
+	} else {
+		log.Info("Kafka producer closed")
+	}
+
+	if err := grpcClient.Close(); err != nil {
+		log.Error("Failed to close gRPC client", slog.Any("error", err))
+	} else {
+		log.Info("gRPC client closed")
+	}
+
+	if err := db.Close(); err != nil {
+		log.Error("Failed to close database", slog.Any("error", err))
+	} else {
+		log.Info("Database connection closed")
+	}
+
+	log.Info("Currency-wallet stopped gracefully")
 }

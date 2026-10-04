@@ -17,6 +17,7 @@ type CurrencyRateCache struct {
 }
 
 type CurrencyClient struct {
+	conn           *grpc.ClientConn
 	client         pb.ExchangeServiceClient
 	log            *slog.Logger
 	cacheTTL       time.Duration
@@ -36,6 +37,7 @@ func NewCurrencyClient(addr string, log *slog.Logger, cacheTTL time.Duration) (*
 	}
 	log.Info("grpc currency client successfully created")
 	return &CurrencyClient{
+		conn:          conn,
 		client:        pb.NewExchangeServiceClient(conn),
 		log:           log,
 		cacheTTL:      cacheTTL,
@@ -128,4 +130,19 @@ func (c *CurrencyClient) GetRateCurrency(ctx context.Context, from, to string) (
 
 	c.log.Info("successfully fetched currency exchange rate")
 	return float64(resp.Rate), nil
+}
+
+func (c *CurrencyClient) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+
+	c.log.Info("closing grpc currency client")
+
+	if err := c.conn.Close(); err != nil {
+		c.log.Error("failed to close grpc connection", slog.Any("error", err))
+		return err
+	}
+
+	return nil
 }
