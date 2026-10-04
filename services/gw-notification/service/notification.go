@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/Lirikman/money_services/services/gw-notification/kafka"
@@ -66,13 +68,34 @@ func (s *NotificationService) Run(ctx context.Context) error {
 
 	msgChan := make(chan kafkaResult, s.batchSize)
 
+	var wg sync.WaitGroup
+
+	consumerCtx, cancelConsumer := context.WithCancel(ctx)
+	defer cancelConsumer()
+
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		for {
-			msg, err := s.consumer.Fetch(ctx)
+			msg, err := s.consumer.Fetch(consumerCtx)
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+
+				select {
+				case <-consumerCtx.Done():
+					return
+				case msgChan <- kafkaResult{msg: msg, err: err}:
+				}
+				continue
+			}
 			select {
-			case <-ctx.Done():
+			case <-consumerCtx.Done():
 				return
-			case msgChan <- kafkaResult{msg: msg, err: err}:
+
+			case msgChan <- kafkaResult{msg: msg, err: nil}:
 			}
 		}
 	}()
@@ -80,10 +103,17 @@ func (s *NotificationService) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			s.logger.Info("stopping notification consumer")
+			cancelConsumer()
+			wg.Wait()
 			if len(batch) > 0 {
-				if err := s.flush(ctx, batch); err != nil {
-					return err
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				err := s.flush(shutdownCtx, batch)
+				cancel()
+				if err != nil {
+					return fmt.Errorf("flush batch during shutdown: %w", err)
 				}
+				batch = batch[:0]
 			}
 			s.logger.Info("notification service stopped")
 			return nil
@@ -99,8 +129,8 @@ func (s *NotificationService) Run(ctx context.Context) error {
 
 		case res := <-msgChan:
 			if res.err != nil {
-				if ctx.Err() != nil {
-					return nil
+				if errors.Is(res.err, context.Canceled) {
+					continue
 				}
 				s.logger.Error("failed to fetch kafka message", slog.Any("error", res.err))
 				continue

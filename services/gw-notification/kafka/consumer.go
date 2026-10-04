@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -45,6 +46,10 @@ func NewConsumer(brokers []string, topic string, groupID string, log *slog.Logge
 func (c *Consumer) Fetch(ctx context.Context) (kafka.Message, error) {
 	message, err := c.reader.FetchMessage(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			c.logger.Debug("kafka consumer fetch canceled")
+			return kafka.Message{}, context.Canceled
+		}
 		c.logger.ErrorContext(ctx, "failed to fetch kafka message", "error", err)
 		return kafka.Message{}, fmt.Errorf("fetch kafka message: %w", err)
 	}
@@ -53,6 +58,9 @@ func (c *Consumer) Fetch(ctx context.Context) (kafka.Message, error) {
 
 func (c *Consumer) Commit(ctx context.Context, messages ...kafka.Message) error {
 	if err := c.reader.CommitMessages(ctx, messages...); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
 		c.logger.ErrorContext(ctx, "failed to commit kafka offsets", "error", err, "count", len(messages))
 		return fmt.Errorf("commit kafka offset: %w", err)
 	}
@@ -70,10 +78,13 @@ func (c *Consumer) Commit(ctx context.Context, messages ...kafka.Message) error 
 }
 
 func (c *Consumer) Close() error {
+	c.logger.Info("closing kafka reader")
+
 	if err := c.reader.Close(); err != nil {
-		c.logger.Error("failed to close kafka reader", "error", err)
 		return fmt.Errorf("close kafka reader: %w", err)
 	}
-	c.logger.Info("kafka reader closed successfully")
+
+	c.logger.Info("kafka reader closed")
+
 	return nil
 }

@@ -50,41 +50,13 @@ func NewConsumer(brokers []string, topic string, groupID string, svc *service.An
 }
 
 const (
-	batchSize    = 1000
-	flushTimeout = 3 * time.Second
+	batchSize       = 1000
+	flushTimeout    = 3 * time.Second
+	shutdownTimeout = 10 * time.Second
 )
-
-func (c *Consumer) readMessages(ctx context.Context, out chan<- kafkaGo.Message) error {
-	defer close(out)
-
-	for {
-		msg, err := c.reader.FetchMessage(ctx)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return nil
-			}
-			c.logger.Error("Fetch kafka message", slog.Any("error", err))
-			return err
-		}
-
-		select {
-		case out <- msg:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
 
 func (c *Consumer) Run(ctx context.Context) error {
 	c.logger.Info("KAFKA CONSUMER STARTED")
-
-	messages := make(chan kafkaGo.Message, 1000)
-
-	go func() {
-		if err := c.readMessages(ctx, messages); err != nil {
-			c.logger.Error("kafka reader stopped", slog.Any("error", err))
-		}
-	}()
 
 	batch := make([]kafkaGo.Message, 0, batchSize)
 
@@ -94,24 +66,34 @@ func (c *Consumer) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			if len(batch) > 0 {
-				_ = c.processBatch(context.Background(), batch)
-			}
-			return nil
+			c.logger.Info("shutdown signal received",
+				slog.Int("pending_batch_size", len(batch)))
+			return c.flushBatchOnShutdown(batch)
 
-		case msg, ok := <-messages:
-			if !ok {
-				return nil
+		default:
+		}
+
+		msg, err := c.reader.FetchMessage(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return c.flushBatchOnShutdown(batch)
 			}
-			batch = append(batch, msg)
-			if len(batch) >= batchSize {
-				if err := c.processBatch(ctx, batch); err != nil {
-					return err
-				}
-				batch = batch[:0]
-				resetTimer(timer, flushTimeout)
+			return fmt.Errorf("fetch kafka message: %w", err)
+		}
+
+		batch = append(batch, msg)
+
+		if len(batch) >= batchSize {
+			if err := c.processBatch(ctx, batch); err != nil {
+				return err
 			}
 
+			batch = batch[:0]
+			resetTimer(timer, flushTimeout)
+			continue
+		}
+
+		select {
 		case <-timer.C:
 			if len(batch) > 0 {
 				if err := c.processBatch(ctx, batch); err != nil {
@@ -120,6 +102,8 @@ func (c *Consumer) Run(ctx context.Context) error {
 				batch = batch[:0]
 			}
 			resetTimer(timer, flushTimeout)
+
+		default:
 		}
 	}
 }
@@ -185,6 +169,30 @@ func (c *Consumer) parseMessage(msg kafkaGo.Message) (models.TransactionEvent, e
 	return event, nil
 }
 
+func (c *Consumer) flushBatchOnShutdown(batch []kafkaGo.Message) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	c.logger.Info("processing pending batch before shutdown", slog.Int("batch_size", len(batch)))
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := c.processBatch(shutdownCtx, batch); err != nil {
+		c.logger.Error("failed to process pending batch during shutdown",
+			slog.Any("error", err),
+			slog.Int("batch_size", len(batch)),
+		)
+
+		return fmt.Errorf("flush batch during shutdown: %w", err)
+	}
+
+	c.logger.Info("pending batch processed successfully", slog.Int("batch_size", len(batch)))
+
+	return nil
+}
+
 func resetTimer(timer *time.Timer, duration time.Duration) {
 	if !timer.Stop() {
 		select {
@@ -193,4 +201,16 @@ func resetTimer(timer *time.Timer, duration time.Duration) {
 		}
 	}
 	timer.Reset(duration)
+}
+
+func (c *Consumer) Close() error {
+	c.logger.Info("closing kafka reader")
+
+	if err := c.reader.Close(); err != nil {
+		return fmt.Errorf("close kafka reader: %w", err)
+	}
+
+	c.logger.Info("kafka reader closed")
+
+	return nil
 }

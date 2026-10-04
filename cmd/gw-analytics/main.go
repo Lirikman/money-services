@@ -38,7 +38,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	dsn := fmt.Sprintf("clickhouse://%s:%s@%s/%s?x-multi-statement=true", cfg.ClickUser, cfg.ClickPassword, cfg.ClickAddr, cfg.ClickDB)
+	dsn := fmt.Sprintf(
+		"clickhouse://%s:%s@%s/%s?x-multi-statement=true",
+		cfg.ClickUser,
+		cfg.ClickPassword,
+		cfg.ClickAddr,
+		cfg.ClickDB,
+	)
+
 	m, err := migrate.New(cfg.MigratePath, dsn)
 	if err != nil {
 		slog.Error("Failed to initialize the migrator", slog.Any("error", err))
@@ -78,7 +85,15 @@ func main() {
 	log.Info("gw-analytics started")
 
 	if err := consumer.Run(ctx); err != nil {
-		log.Error("consumer stopped", slog.Any("error", err))
+		if !errors.Is(err, context.Canceled) {
+			log.Error("consumer stopped with error", slog.Any("error", err))
+		}
+	}
+
+	log.Info("closing kafka consumer")
+
+	if err := consumer.Close(); err != nil {
+		log.Error("failed to close kafka consumer", slog.Any("error", err))
 	}
 
 	log.Info("gw-analytics stopped")
